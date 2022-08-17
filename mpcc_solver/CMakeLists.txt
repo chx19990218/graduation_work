@@ -13,15 +13,25 @@ catkin_package(
 
 )
 
+find_package(PythonLibs REQUIRED)
+include_directories(${PYTHON_INCLUDE_DIRS})
+
 
 include_directories(
   ${catkin_INCLUDE_DIRS}
   ${EIGEN_INCLUDE_DIRS}
   include
+  src/Spline
+  src/matplotlib-cpp
 )
 add_executable(mpcc_node 
   src/main.cpp
+  src/Spline/arc_length_spline.cpp
+  src/Spline/cubic_spline.cpp
 )
+
+target_link_libraries(mpcc_node ${PYTHON_LIBRARIES})
+
 target_link_libraries(mpcc_node
   ${catkin_LIBRARIES}
 )

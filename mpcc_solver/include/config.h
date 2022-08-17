@@ -10,6 +10,9 @@
 #define NB 13 //max number of bounds
 #define NPC 3 //number of polytopic constraints
 #define NS 3
+static constexpr int N = 60;
+static constexpr double INF = 1E5;
+static constexpr int N_SPLINE = 5000;
 
 typedef Eigen::Matrix<double,NX,1> StateVector;
 typedef Eigen::Matrix<double,NU,1> InputVector;
@@ -92,45 +95,45 @@ struct Input {
   }
 };
 
-StateVector StateToVector(const State &state) {
-    StateVector temp;
-    temp(0) = state.x_;
-    temp(1) = state.y_;
-    temp(2) = state.z_;
-    temp(3) = state.vx_;
-    temp(4) = state.vy_;
-    temp(5) = state.vz_;
-    temp(6) = state.theta_;
-    temp(7) = state.ax_;
-    temp(8) = state.ay_;
-    temp(9) = state.az_;
-    temp(10) = state.v_theta_;
-    return temp;
-}
-InputVector InputToVector(const Input &input) {
-  InputVector temp = {input.d_ax_, input.d_ay_, input.d_az_, input.d_v_theta_};
-  return temp;
-}
-State VectorToState(const StateVector &state_vector) {
-    State temp;
-    temp.x_ = state_vector(0);
-    temp.y_ = state_vector(1);
-    temp.z_ = state_vector(2);
-    temp.vx_ = state_vector(3);
-    temp.vy_ = state_vector(4);
-    temp.vz_ = state_vector(5);
-    temp.theta_ = state_vector(6);
-    temp.ax_ = state_vector(7);
-    temp.ay_ = state_vector(8);
-    temp.az_ = state_vector(9);
-    temp.v_theta_ = state_vector(10);
-    return temp;
-}
-Input vectorToInput(const InputVector &input_vector) {
-    Input temp;
-    temp.d_ax_ = input_vector(0);
-    temp.d_ay_ = input_vector(1);
-    temp.d_az_ = input_vector(2);
-    temp.d_v_theta_ = input_vector(3);
-    return temp;
-}
+// StateVector StateToVector(const State &state) {
+//     StateVector temp;
+//     temp(0) = state.x_;
+//     temp(1) = state.y_;
+//     temp(2) = state.z_;
+//     temp(3) = state.vx_;
+//     temp(4) = state.vy_;
+//     temp(5) = state.vz_;
+//     temp(6) = state.theta_;
+//     temp(7) = state.ax_;
+//     temp(8) = state.ay_;
+//     temp(9) = state.az_;
+//     temp(10) = state.v_theta_;
+//     return temp;
+// }
+// InputVector InputToVector(const Input &input) {
+//   InputVector temp = {input.d_ax_, input.d_ay_, input.d_az_, input.d_v_theta_};
+//   return temp;
+// }
+// State VectorToState(const StateVector &state_vector) {
+//     State temp;
+//     temp.x_ = state_vector(0);
+//     temp.y_ = state_vector(1);
+//     temp.z_ = state_vector(2);
+//     temp.vx_ = state_vector(3);
+//     temp.vy_ = state_vector(4);
+//     temp.vz_ = state_vector(5);
+//     temp.theta_ = state_vector(6);
+//     temp.ax_ = state_vector(7);
+//     temp.ay_ = state_vector(8);
+//     temp.az_ = state_vector(9);
+//     temp.v_theta_ = state_vector(10);
+//     return temp;
+// }
+// Input VectorToInput(const InputVector &input_vector) {
+//     Input temp;
+//     temp.d_ax_ = input_vector(0);
+//     temp.d_ay_ = input_vector(1);
+//     temp.d_az_ = input_vector(2);
+//     temp.d_v_theta_ = input_vector(3);
+//     return temp;
+// }
