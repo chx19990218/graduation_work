@@ -22,12 +22,14 @@ include_directories(
   ${EIGEN_INCLUDE_DIRS}
   include
   src/Spline
+  src/map
   src/matplotlib-cpp
 )
 add_executable(mpcc_node 
   src/main.cpp
   src/Spline/arc_length_spline.cpp
   src/Spline/cubic_spline.cpp
+  src/map/map.cpp
 )
 
 target_link_libraries(mpcc_node ${PYTHON_LIBRARIES})
