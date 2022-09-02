@@ -30,10 +30,10 @@ int main(int argc, char** argv)
   std::vector<double> plot_yi(map.inner_point_y_.data(), map.inner_point_y_.data() + map.inner_point_y_.size());
   plt::figure(1);
   plt::plot(plot_xc,plot_yc,"r--");
-  plt::plot(plot_xo,plot_yo,"b--");
-  plt::plot(plot_xi,plot_yi,"g--");
-  plt::plot(search.clutter_outer_x, search.clutter_outer_y,"p--");
-  plt::plot(search.clutter_inner_x, search.clutter_inner_y,"p--");
+  plt::plot(plot_xo,plot_yo,"b");
+  plt::plot(plot_xi,plot_yi,"b");
+  plt::plot(search.result_x, search.result_y,"p--");
+  // plt::plot(search.clutter_inner_x, search.clutter_inner_y,"p--");
   plt::show();
 
 
