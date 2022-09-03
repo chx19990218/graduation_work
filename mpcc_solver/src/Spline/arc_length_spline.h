@@ -37,7 +37,6 @@ public:
 
     ArcLengthSpline();
 
-private:
     void setData(const Eigen::VectorXd &X_in,const Eigen::VectorXd &Y_in);
     void setRegularData(const Eigen::VectorXd &X_in,const Eigen::VectorXd &Y_in,const Eigen::VectorXd &s_in);
     Eigen::VectorXd compArcLength(const Eigen::VectorXd &X_in,const Eigen::VectorXd &Y_in) const;

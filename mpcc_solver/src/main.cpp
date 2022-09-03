@@ -4,6 +4,7 @@
 #include "map.h"
 #include "search.h"
 #include "smooth.h"
+#include "resample.h"
 
 
 namespace plt = matplotlibcpp;
@@ -21,23 +22,27 @@ int main(int argc, char** argv)
   Map map;
   Search search;
   Smooth smooth;
+  Resample resample;
   map.GenerateMap();
   search.SphereSearch(map);
   smooth.Fem(search);
-
+  resample.FitResample(smooth);
   std::vector<double> plot_xc(map.center_point_x_.data(), map.center_point_x_.data() + map.center_point_x_.size());
   std::vector<double> plot_yc(map.center_point_y_.data(), map.center_point_y_.data() + map.center_point_y_.size());
   std::vector<double> plot_xo(map.outer_point_x_.data(), map.outer_point_x_.data() + map.outer_point_x_.size());
   std::vector<double> plot_yo(map.outer_point_y_.data(), map.outer_point_y_.data() + map.outer_point_y_.size());
   std::vector<double> plot_xi(map.inner_point_x_.data(), map.inner_point_x_.data() + map.inner_point_x_.size());
   std::vector<double> plot_yi(map.inner_point_y_.data(), map.inner_point_y_.data() + map.inner_point_y_.size());
+  std::vector<double> plot_x_resample(resample.spline.path_data_.X.data(), resample.spline.path_data_.X.data() + resample.spline.path_data_.X.size());
+  std::vector<double> plot_y_resample(resample.spline.path_data_.Y.data(), resample.spline.path_data_.Y.data() + resample.spline.path_data_.Y.size());
   plt::figure(1);
   plt::plot(plot_xc,plot_yc,"r--");
-  plt::plot(plot_xo,plot_yo,"b");
-  plt::plot(plot_xi,plot_yi,"b");
-  plt::plot(search.result_x, search.result_y,"p--");
-  plt::plot(smooth.result_x, smooth.result_y,"y.-");
-  // plt::plot(search.clutter_inner_x, search.clutter_inner_y,"p--");
+  plt::plot(plot_xo,plot_yo,"k");
+  plt::plot(plot_xi,plot_yi,"k");
+  plt::named_plot("search", search.result_x, search.result_y,"p--");
+  plt::named_plot("smooth", smooth.result_x, smooth.result_y,"y.-");
+  plt::named_plot("fit and resample", plot_x_resample, plot_y_resample,"m--");
+  plt::legend();
   plt::show();
 
 

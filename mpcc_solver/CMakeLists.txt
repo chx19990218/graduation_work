@@ -33,6 +33,7 @@ add_executable(mpcc_node
   src/map/map.cpp
   src/referenceline/search.cpp
   src/referenceline/smooth.cpp
+  src/referenceline/resample.cpp
 )
 
 target_link_libraries(mpcc_node ${PYTHON_LIBRARIES})
