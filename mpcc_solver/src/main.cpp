@@ -3,6 +3,7 @@
 #include "config.h"
 #include "map.h"
 #include "search.h"
+#include "smooth.h"
 
 
 namespace plt = matplotlibcpp;
@@ -19,8 +20,10 @@ int main(int argc, char** argv)
   
   Map map;
   Search search;
+  Smooth smooth;
   map.GenerateMap();
   search.SphereSearch(map);
+  smooth.Fem(search);
 
   std::vector<double> plot_xc(map.center_point_x_.data(), map.center_point_x_.data() + map.center_point_x_.size());
   std::vector<double> plot_yc(map.center_point_y_.data(), map.center_point_y_.data() + map.center_point_y_.size());
@@ -33,6 +36,7 @@ int main(int argc, char** argv)
   plt::plot(plot_xo,plot_yo,"b");
   plt::plot(plot_xi,plot_yi,"b");
   plt::plot(search.result_x, search.result_y,"p--");
+  plt::plot(smooth.result_x, smooth.result_y,"y.-");
   // plt::plot(search.clutter_inner_x, search.clutter_inner_y,"p--");
   plt::show();
 

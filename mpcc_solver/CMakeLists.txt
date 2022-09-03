@@ -32,6 +32,7 @@ add_executable(mpcc_node
   src/Spline/cubic_spline.cpp
   src/map/map.cpp
   src/referenceline/search.cpp
+  src/referenceline/smooth.cpp
 )
 
 target_link_libraries(mpcc_node ${PYTHON_LIBRARIES})
