@@ -7,6 +7,7 @@
 
 #include <eigen3/Eigen/Dense>
 #include <eigen3/Eigen/Sparse>
+#include "sparse_utils.h"
 #include "resample.h"
 
 //x vx y vy z vz theta
@@ -32,7 +33,19 @@ class Mpcc {
   double Ts = 0.02;
   std::vector<Stage> stage = std::vector<Stage>(horizon);
 
+  Eigen::SparseMatrix<double> Q;
+  Eigen::SparseMatrix<double> q;
+  Eigen::SparseMatrix<double> Ad;
+  Eigen::SparseMatrix<double> Bd;
+  Eigen::SparseMatrix<double> AA;
+  Eigen::SparseMatrix<double> BB;
+  Eigen::SparseMatrix<double> AAT;
+  Eigen::SparseMatrix<double> BBT;
+  Eigen::SparseMatrix<double> Q_qp;
+  Eigen::SparseMatrix<double> c_qp;
+
   Mpcc();
   void CalculateCost(const Resample& referenceline);
   void GetOptimalTheta(std::vector<double>& optimal_theta);
+  void SetMpccParam(Eigen::SparseMatrix<double>& x0);
 };

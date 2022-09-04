@@ -7,7 +7,7 @@ find_package(catkin REQUIRED COMPONENTS
   std_msgs
 )
 find_package(Eigen3 REQUIRED)
-
+find_package(osqp REQUIRED)
 
 catkin_package(
 
@@ -26,6 +26,7 @@ include_directories(
   src/mpcc
   src/referenceline
   src/matplotlib-cpp
+  src/utils
 )
 add_executable(mpcc_node 
   src/main.cpp

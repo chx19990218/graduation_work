@@ -17,10 +17,46 @@ Mpcc::Mpcc() {
   // displayPtr = new DisplayMsgs(map, horizon);
   // initStatus = true;
 
-  // Qk.resize(horizon * numState, horizon * numState);
-  // qk.resize(horizon * numState, 1);
-  // AA.resize(horizon * numState, numState);
-  // BB.resize(horizon * numState, horizon * numInput);
+  Q.resize(horizon * state_dim_, horizon * state_dim_);
+  q.resize(horizon * state_dim_, 1);
+  AA.resize(horizon * state_dim_, state_dim_);
+  BB.resize(horizon * state_dim_, horizon * control_dim_);
+
+  Ad.resize(state_dim_, state_dim_);
+  std::vector<Eigen::Triplet<double>> triplets;
+  for (int i = 0; i < state_dim_; i++) {
+    triplets.push_back(Eigen::Triplet<double>(i, i, 1));
+  }
+  triplets.push_back(Eigen::Triplet<double>(0, 1, Ts));
+  triplets.push_back(Eigen::Triplet<double>(2, 3, Ts));
+  triplets.push_back(Eigen::Triplet<double>(4, 5, Ts));
+  Ad.setFromTriplets(triplets.begin(), triplets.end());
+
+  Bd.resize(state_dim_, control_dim_);
+  triplets.clear();
+  triplets.push_back(Eigen::Triplet<double>(1, 0, Ts));
+  triplets.push_back(Eigen::Triplet<double>(3, 1, Ts));
+  triplets.push_back(Eigen::Triplet<double>(5, 1, Ts));
+  triplets.push_back(Eigen::Triplet<double>(6, 1, 1.0));
+  Bd.setFromTriplets(triplets.begin(), triplets.end());
+
+  // initialize AA & BB:
+  Eigen::SparseMatrix<double> tmpA = Ad;
+  Eigen::SparseMatrix<double> tmpB(state_dim_, horizon * control_dim_);
+  sp::colMajor::setRows(AA, Ad, 0);
+  sp::colMajor::setBlock(BB, Bd, 0, 0);
+  for (int k = 1; k < horizon; k++) {
+    tmpA = Ad * tmpA;
+    sp::colMajor::setRows(AA, tmpA, k * state_dim_);
+    tmpB = Ad *
+           BB.block((k - 1) * state_dim_, 0, state_dim_, horizon * control_dim_);
+    // 先把上一行乘Ad挪下来
+    sp::colMajor::setRows(BB, tmpB, k * state_dim_);
+    // 再加上新的
+    sp::colMajor::setBlock(BB, Bd, k * state_dim_, k * control_dim_);
+  }
+  AAT = AA.transpose();
+  BBT = BB.transpose();
   // In.resize(horizon * numInput, horizon * numInput);
   // A.resize(0, 0);
   // b.resize(0, 0);
@@ -50,21 +86,7 @@ Mpcc::Mpcc() {
   //   sp::colMajor::setRows(uu, inputUs, numInput * i);
   //   xu.coeffRef(i * numState + 9, 0) = map.thetaMax;
   // }
-  // // initialize AA & BB:
-  // Eigen::SparseMatrix<double> tmpA = model.Ad;
-  // Eigen::SparseMatrix<double> tmpB(numState, horizon * numInput);
-  // sp::colMajor::setRows(AA, model.Ad, 0);
-  // sp::colMajor::setBlock(BB, model.Bd, 0, 0);
-  // for (int k = 1; k < horizon; ++k) {
-  //   tmpA = model.Ad * tmpA;
-  //   sp::colMajor::setRows(AA, tmpA, k * numState);
-  //   tmpB = model.Ad *
-  //          BB.block((k - 1) * numState, 0, numState, horizon * numInput);
-  //   sp::colMajor::setRows(BB, tmpB, k * numState);
-  //   sp::colMajor::setBlock(BB, model.Bd, k * numState, k * numInput);
-  // }
-  // AAT = AA.transpose();
-  // BBT = BB.transpose();
+  
   // // initialize In: -> penalty minium snap
   // for (int i = 0; i < horizon * numInput; ++i) {
   //   In.coeffRef(i, i) = 1e-4;
@@ -91,7 +113,8 @@ void Mpcc::GetOptimalTheta(std::vector<double>& optimal_theta) {
     for (int i = 1; i < horizon; i++) {
       optimal_theta.emplace_back(stage[i].state.back());
     }
-    optimal_theta.emplace_back(stage.back().state.back() + stage.back().u.back() * Ts);
+    optimal_theta.emplace_back(stage.back().state.back() +
+                               stage.back().u.back() * Ts);
   }
 }
 
@@ -116,9 +139,9 @@ void Mpcc::CalculateCost(const Resample& referenceline) {
     Eigen::SparseMatrix<double> grad_x(state_dim_, 1);
     Eigen::SparseMatrix<double> grad_y(state_dim_, 1);
     Eigen::SparseMatrix<double> grad_z(state_dim_, 1);
-    grad_x.coeffRef(0, 0) = 1;
-    grad_y.coeffRef(2, 0) = 1;
-    grad_z.coeffRef(4, 0) = 1;
+    grad_x.coeffRef(0, 0) = 1.0;
+    grad_y.coeffRef(2, 0) = 1.0;
+    grad_z.coeffRef(4, 0) = 1.0;
     grad_x.coeffRef(6, 0) = -dx_dtheta;
     grad_y.coeffRef(6, 0) = -dy_dtheta;
     grad_z.coeffRef(6, 0) = -dz_dtheta;
@@ -129,8 +152,20 @@ void Mpcc::CalculateCost(const Resample& referenceline) {
   }
 
   // qn.coeffRef(numState - Model::numOrder + 1, 0) = -qVTheta;
-  // sp::colMajor::setBlock(Qk, Qn, numState * horizon_, numState * horizon_);
-  // sp::colMajor::setBlock(qk, qn, numState * horizon_, 0);
+}
+
+void Mpcc::SetMpccParam(Eigen::SparseMatrix<double>& x0) {
+  for (int i = 0; i < horizon; i++) {
+    sp::colMajor::setBlock(Q, stage[i].Qn, state_dim_ * i, state_dim_ * i);
+    sp::colMajor::setBlock(q, stage[i].qn, state_dim_ * i, 0);
+  }
+  Eigen::SparseMatrix<double> progress(control_dim_ * horizon, 1);
+  double gamma = 1.0;
+  for (int i = 0; i < horizon; i++) {
+    progress.coeffRef(4 * i + 3, 0) = gamma;
+  }
+  Q_qp = BBT * Q * BB;
+  c_qp = 2 * BBT * Q * AA * x0 + BBT * q - progress;
 }
 // void MpcSolver::calculateConstrains(Eigen::SparseMatrix<double>& stateTmp,
 //                                     int horizon_) {
@@ -184,9 +219,9 @@ void Mpcc::CalculateCost(const Resample& referenceline) {
 //   sp::colMajor::addBlock(Ck, Cn);
 //   sp::colMajor::addRows(Ckb, Cnb);
 // }
-// int MpcSolver::solveMpcQp(Eigen::SparseMatrix<double>& stateTmp) {
+// void MpcSolver::solveMpcQp(Eigen::SparseMatrix<double>& stateTmp) {
 //   Eigen::SparseMatrix<double> state = stateTmp;
-  
+
 //   Eigen::SparseMatrix<double> inputPredict1toN =
 //       inputPredict.block(0, 1, numInput, horizon - 1);
 //   sp::colMajor::setCols(inputPredict, inputPredict1toN, 1);
@@ -195,59 +230,17 @@ void Mpcc::CalculateCost(const Resample& referenceline) {
 //   Ck.resize(0, 0);
 //   Ckb.resize(0, 0);
 
-//   displayPtr->displayDrone(state);
-//   displayPtr->displayTheta(state);
+
 //   double theta = 0;
-//   // displayPtr->clearTunnels();
-//   for (int horizonI = 0; horizonI < horizon; ++horizonI) {
-//     if (initStatus) {
-//       theta = model.ts * horizon;
-//     } else {
-//       theta = state.coeffRef(numState - Model::numOrder, 0);
-//     }
-//     calculateCost(theta, horizonI);
-//     if (corridorConstrains) {
-//       calculateConstrains(state, horizonI);
-//     }
-//     state = model.Ad * state + model.Bd * inputPredict.col(horizonI);
-//   }
+  
 
-//   Q = BBT * Qk * BB + In;
+//   Q = BBT * Qk * BB;
 //   c = BBT * Qk * AA * stateTmp + BBT * qk;
-
 
 //   C = BB;
 
-//   // ! set terminal velocity constrain
-//   Vector3d pos, vel;
-//   map.getGlobalCommand(theta, pos, vel);
-//   xu.coeffRef(numState * (horizon - 1) + 1, 0) = 1 * fabs(vel(0));
-//   xu.coeffRef(numState * (horizon - 1) + 4, 0) = 1 * fabs(vel(1));
-//   xu.coeffRef(numState * (horizon - 1) + 7, 0) = 1 * fabs(vel(2));
-//   xl.coeffRef(numState * (horizon - 1) + 1, 0) = -1 * fabs(vel(0));
-//   xl.coeffRef(numState * (horizon - 1) + 4, 0) = -1 * fabs(vel(1));
-//   xl.coeffRef(numState * (horizon - 1) + 7, 0) = -1 * fabs(vel(2));
+  
 
-//   cupp = xu - SparseMatrix<double>(AA * stateTmp);
-//   clow = xl - SparseMatrix<double>(AA * stateTmp);
-
-//   if (Ck.rows() != 0) {
-//     // lower bound should be quite small
-//     Eigen::SparseMatrix<double> zeroRows(Ck.rows(), 1);
-//     for (int i = 0; i < Ck.rows(); ++i) {
-//       zeroRows.coeffRef(i, 0) = -1e10;
-//     }
-//     sp::colMajor::addRows(clow, zeroRows);
-//     zeroRows = -Ck * AA * stateTmp - Ckb;
-//     sp::colMajor::addRows(cupp, zeroRows);
-//     SparseMatrix<double> Ck2 = Ck * BB;
-//     sp::colMajor::addRows(C, Ck2);
-//     sp::colMajor::addRows(C, Inu);
-//     sp::colMajor::addRows(cupp, uu);
-//     sp::colMajor::addRows(clow, ul);
-//   }
-
-//   clock_t t_osqp_start = clock();
 //   osqpInterface.updateMatrices(Q, c, A, b, C, clow, cupp, ul, uu);
 //   osqpInterface.solveQP();
 //   solveStatus = osqpInterface.solveStatus();
@@ -267,18 +260,10 @@ void Mpcc::CalculateCost(const Resample& referenceline) {
 //       sp::colMajor::setCols(statePredict, state, i);
 //     }
 //   } else {
-//     sp::colMajor::setCols(inputPredict, inputPredict1toN, 0);
-//     SparseMatrix<double> statePredict1toN =
-//         statePredict.block(0, 1, numState, horizon - 1);
-//     sp::colMajor::setCols(statePredict, statePredict1toN, 0);
+
 //   }
 
-//   if (initStatus) {
-//     initStatus = false;
+//   if (init_status) {
+//     init_status = false;
 //   }
-//   displayPtr->displayPredict(statePredict);
-//   if (solveStatus == OSQP_SOLVED)
-//     return 0;  // 0 for solved
-//   else
-//     return 1;
 // };
