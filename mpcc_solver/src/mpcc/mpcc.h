@@ -1,110 +1,38 @@
 // Copyright @2022 HITCSC. All rights reserved.
 // Authors: Hongxu Cao (chx19990218@qq.com)
 
-#pragma onces
+#pragma once
 
-#include "config.h"
-#include "types.h"
-#include "Params/params.h"
-#include "Spline/arc_length_spline.h"
-#include "Model/model.h"
-#include "Model/integrator.h"
-#include "Cost/cost.h"
-#include "Constraints/constraints.h"
-#include "Constraints/bounds.h"
+#include "mpcc.h"
 
-#include "Interfaces/solver_interface.h"
-#include "Interfaces/hpipm_interface.h"
+#include <eigen3/Eigen/Dense>
+#include <eigen3/Eigen/Sparse>
+#include "resample.h"
 
-#include <array>
-#include <memory>
-#include <ros/ros.h>
-#include <ratio>
-
-
-struct OptVariables {
-  State xk;
-  Input uk;
-};
+//x vx y vy z vz theta
+int state_dim_ = 7;
+//ax ay az v_theta
+int control_dim_ = 4;
 
 struct Stage {
-  LinModelMatrix lin_model;
-  CostMatrix cost_mat;
-  ConstrainsMatrix constrains_mat;
-
-  Bounds_x u_bounds_x;
-  Bounds_x l_bounds_x;
-
-  Bounds_u u_bounds_u;
-  Bounds_u l_bounds_u;
-
-  Bounds_s u_bounds_s;
-  Bounds_s l_bounds_s;
-
-  //nx    -> number of states
-  //nu    -> number of inputs
-  //nbx   -> number of bounds on x
-  //nbu   -> number of bounds on u
-  //ng    -> number of polytopic constratins
-  //ns   -> number of soft constraints
-  int nx, nu, nbx, nbu, ng, ns;
+  Eigen::SparseMatrix<double> Qn;
+  Eigen::SparseMatrix<double> qn;
+  std::vector<double> state = std::vector<double>(state_dim_);
+  std::vector<double> u = std::vector<double>(control_dim_);
+  Stage() {
+    Qn.resize(state_dim_, state_dim_);
+    qn.resize(state_dim_, 1);
+  };
 };
 
-struct MPCReturn {
-  const Input u0;
-  const std::array<OptVariables,N+1> mpc_horizon;
-  const double time_total;
-};
-
-class MPC {
+class Mpcc {
  public:
-  MPCReturn runMPC(State &x0);
+  int horizon = 10;
+  bool init_status = true;
+  double Ts = 0.02;
+  std::vector<Stage> stage = std::vector<Stage>(horizon);
 
-  MPC();
-  MPC(int n_sqp, int n_reset, double sqp_mixing, double Ts,const PathToJson &path);
-
-private:
-  bool valid_initial_guess_;
-
-  std::array<Stage, N + 1> stages_;
-
-  std::array<OptVariables, N + 1> initial_guess_;
-  std::array<OptVariables, N + 1> optimal_solution_;
-
-  void setMPCProblem();
-
-  void setStage(const State &xk, const Input &uk, int time_step);
-
-  CostMatrix normalizeCost(const CostMatrix &cost_mat);
-  LinModelMatrix normalizeDynamics(const LinModelMatrix &lin_model);
-  ConstrainsMatrix normalizeCon(const ConstrainsMatrix &con_mat);
-  std::array<OptVariables,N+1> deNormalizeSolution(const std::array<OptVariables,N+1> &solution);
-
-  void updateInitialGuess(const State &x0);
-
-  void generateNewInitialGuess(const State &x0);
-
-  void unwrapInitialGuess();
-
-  std::array<OptVariables, N + 1> sqpSolutionUpdate(const std::array<OptVariables, N + 1> &last_solution,
-                                                    const std::array<OptVariables, N + 1> &current_solution);
-
-  int n_sqp_;
-  double sqp_mixing_;
-  int n_non_solves_;
-  int n_no_solves_sqp_;
-  int n_reset_;
-
-  const double Ts_;
-
-  Model model_;
-  Integrator integrator_;
-  Cost cost_;
-  Constraints constraints_;
-
-  Bounds bounds_;
-  NormalizationParam normalization_param_;
-  Param param_;
-
-  std::unique_ptr<SolverInterface> solver_interface_;
+  Mpcc();
+  void CalculateCost(const Resample& referenceline);
+  void GetOptimalTheta(std::vector<double>& optimal_theta);
 };

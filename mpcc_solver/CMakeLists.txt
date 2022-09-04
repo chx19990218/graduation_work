@@ -23,6 +23,7 @@ include_directories(
   include
   src/Spline
   src/map
+  src/mpcc
   src/referenceline
   src/matplotlib-cpp
 )
@@ -31,6 +32,7 @@ add_executable(mpcc_node
   src/Spline/arc_length_spline.cpp
   src/Spline/cubic_spline.cpp
   src/map/map.cpp
+  src/mpcc/mpcc.cpp
   src/referenceline/search.cpp
   src/referenceline/smooth.cpp
   src/referenceline/resample.cpp
