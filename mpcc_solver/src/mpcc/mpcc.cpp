@@ -32,7 +32,7 @@ Mpcc::Mpcc() {
 
   Ad.resize(state_dim_, state_dim_);
   std::vector<Eigen::Triplet<double>> triplets;
-  for (int i = 0; i < state_dim_-1; i++) {
+  for (int i = 0; i < state_dim_ - 1; i++) {
     triplets.push_back(Eigen::Triplet<double>(i, i, 1));
   }
   triplets.push_back(Eigen::Triplet<double>(0, 1, Ts));
@@ -56,8 +56,8 @@ Mpcc::Mpcc() {
   for (int k = 1; k < horizon; k++) {
     tmpA = Ad * tmpA;
     sp::colMajor::setRows(AA, tmpA, k * state_dim_);
-    tmpB = Ad *
-           BB.block((k - 1) * state_dim_, 0, state_dim_, horizon * control_dim_);
+    tmpB = Ad * BB.block((k - 1) * state_dim_, 0, state_dim_,
+                         horizon * control_dim_);
     // 先把上一行乘Ad挪下来
     sp::colMajor::setRows(BB, tmpB, k * state_dim_);
     // 再加上新的
@@ -67,22 +67,22 @@ Mpcc::Mpcc() {
   BBT = BB.transpose();
   xl.resize(horizon * state_dim_, 1);
   xu.resize(horizon * state_dim_, 1);
-  Eigen::SparseMatrix<double> stateUs(state_dim_,1);
-  Eigen::SparseMatrix<double> stateLs(state_dim_,1);
-  for (int i = 0; i < state_dim_; i++){
-    stateUs.coeffRef(i,0) = 100.0;
-    stateLs.coeffRef(i,0) = -100.0;
+  Eigen::SparseMatrix<double> stateUs(state_dim_, 1);
+  Eigen::SparseMatrix<double> stateLs(state_dim_, 1);
+  for (int i = 0; i < state_dim_; i++) {
+    stateUs.coeffRef(i, 0) = 100.0;
+    stateLs.coeffRef(i, 0) = -100.0;
   }
   for (int i = 0; i < horizon; i++) {
-    sp::colMajor::setRows(xl, stateLs, state_dim_*i);
-    sp::colMajor::setRows(xu, stateUs, state_dim_*i);
+    sp::colMajor::setRows(xl, stateLs, state_dim_ * i);
+    sp::colMajor::setRows(xu, stateUs, state_dim_ * i);
   }
   inputPredict.resize(control_dim_, horizon);
   statePredict.resize(state_dim_, horizon);
-  ul.resize(horizon*control_dim_, 1);
-  uu.resize(horizon*control_dim_, 1);
-  A.resize(0,0);
-  b.resize(0,0);
+  ul.resize(horizon * control_dim_, 1);
+  uu.resize(horizon * control_dim_, 1);
+  A.resize(0, 0);
+  b.resize(0, 0);
 
   // In.resize(horizon * numInput, horizon * numInput);
   // A.resize(0, 0);
@@ -113,7 +113,7 @@ Mpcc::Mpcc() {
   //   sp::colMajor::setRows(uu, inputUs, numInput * i);
   //   xu.coeffRef(i * numState + 9, 0) = map.thetaMax;
   // }
-  
+
   // // initialize In: -> penalty minium snap
   // for (int i = 0; i < horizon * numInput; ++i) {
   //   In.coeffRef(i, i) = 1e-4;
@@ -127,7 +127,6 @@ Mpcc::Mpcc() {
   // Inu.setIdentity();
 }
 
-
 void Mpcc::GetOptimalTheta() {
   auto temp = optimal_theta;
   optimal_theta.clear();
@@ -140,14 +139,17 @@ void Mpcc::GetOptimalTheta() {
     }
   } else {
     for (int i = 1; i < horizon; i++) {
-      optimal_theta.emplace_back(temp[i]);
+      optimal_theta.emplace_back(std::fmod(temp[i], max_theta_));
     }
-    optimal_theta.emplace_back(temp.back() +
-                               inputPredict.coeffRef(control_dim_ - 1, horizon - 1) * Ts);
+    optimal_theta.emplace_back(std::fmod(
+        temp.back() + inputPredict.coeffRef(control_dim_ - 1, horizon - 1) * Ts,
+        max_theta_));
   }
 }
 
-void Mpcc::CalculateCost(const Resample& referenceline, Eigen::SparseMatrix<double>& x0) {
+void Mpcc::CalculateCost(const Resample& referenceline,
+                         Eigen::SparseMatrix<double>& x0) {
+  max_theta_ = referenceline.spline.getLength();
   stage.clear();
   GetOptimalTheta();
   for (int i = 0; i < horizon; i++) {
@@ -174,21 +176,22 @@ void Mpcc::CalculateCost(const Resample& referenceline, Eigen::SparseMatrix<doub
     grad_x.coeffRef(6, 0) = -dx_dtheta;
     grad_y.coeffRef(6, 0) = -dy_dtheta;
     grad_z.coeffRef(6, 0) = -dz_dtheta;
-    Eigen::SparseMatrix<double> Qn = grad_x * Eigen::SparseMatrix<double>(grad_x.transpose()) +
-                  grad_y * Eigen::SparseMatrix<double>(grad_y.transpose()) +
-                  grad_z * Eigen::SparseMatrix<double>(grad_z.transpose());
-    Eigen::SparseMatrix<double> qn = -2 * r_x * grad_x - 2 * r_y * grad_y - 2 * r_z * grad_z;
+    Eigen::SparseMatrix<double> Qn =
+        grad_x * Eigen::SparseMatrix<double>(grad_x.transpose()) +
+        grad_y * Eigen::SparseMatrix<double>(grad_y.transpose()) +
+        grad_z * Eigen::SparseMatrix<double>(grad_z.transpose());
+    Eigen::SparseMatrix<double> qn =
+        -2 * r_x * grad_x - 2 * r_y * grad_y - 2 * r_z * grad_z;
     sp::colMajor::setBlock(Q, Qn, state_dim_ * i, state_dim_ * i);
     sp::colMajor::setBlock(q, qn, state_dim_ * i, 0);
-    
   }
-  
+
   Eigen::SparseMatrix<double> progress(control_dim_ * horizon, 1);
-  double gamma = 0.001;
+  double gamma = 0.0001;
   for (int i = 0; i < horizon; i++) {
     progress.coeffRef(4 * i + 3, 0) = gamma;
   }
-  
+
   H = 2 * BBT * Q * BB;
   // std::cout<<AA<<std::endl;
   f = 2 * BBT * Q * AA * x0 + BBT * q - progress;
@@ -250,9 +253,9 @@ void Mpcc::SolveQp(Eigen::SparseMatrix<double>& stateTmp) {
   Eigen::SparseMatrix<double> state = stateTmp;
 
   C = BB;
-  
-  cupp = xu - Eigen::SparseMatrix<double>(AA*stateTmp);
-  clow = xl - Eigen::SparseMatrix<double>(AA*stateTmp);
+
+  cupp = xu - Eigen::SparseMatrix<double>(AA * stateTmp);
+  clow = xl - Eigen::SparseMatrix<double>(AA * stateTmp);
 
   // std::cout<<clow<<std::endl;
   osqpInterface.updateMatrices(H, f, A, b, C, clow, cupp, ul, uu);
@@ -261,15 +264,14 @@ void Mpcc::SolveQp(Eigen::SparseMatrix<double>& stateTmp) {
 
   auto solPtr = osqpInterface.solPtr();
 
-
   if (solveStatus == OSQP_SOLVED) {
     optimal_theta.clear();
     Eigen::SparseMatrix<double> state = stateTmp;
-    
+
     stage.clear();
     for (int i = 0; i < horizon; i++) {
       for (int j = 0; j < control_dim_; j++) {
-        inputPredict.coeffRef(j, i) = solPtr->x[i*control_dim_+j];
+        inputPredict.coeffRef(j, i) = solPtr->x[i * control_dim_ + j];
         // stage[i].u[j] = solPtr->x[i*control_dim_+j];
       }
       state = Ad * state + Bd * inputPredict.col(i);
@@ -280,7 +282,7 @@ void Mpcc::SolveQp(Eigen::SparseMatrix<double>& stateTmp) {
       optimal_theta.emplace_back(state.coeffRef(6, 0));
     }
   } else {
-    std::cout << "no solution" <<std::endl;
+    std::cout << "no solution" << std::endl;
   }
 
   if (init_status) {

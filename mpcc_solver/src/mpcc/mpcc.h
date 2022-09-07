@@ -39,6 +39,7 @@ class Mpcc {
   int horizon = 10;
   bool init_status = true;
   double Ts = 0.02;
+  double max_theta_;
   std::vector<Stage> stage;// = std::vector<Stage>(horizon);
 
   OSQPInterface osqpInterface;

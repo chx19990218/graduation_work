@@ -38,7 +38,7 @@ int main(int argc, char** argv)
   std::vector<double> plot_x_resample(resample.spline.path_data_.X.data(), resample.spline.path_data_.X.data() + resample.spline.path_data_.X.size());
   std::vector<double> plot_y_resample(resample.spline.path_data_.Y.data(), resample.spline.path_data_.Y.data() + resample.spline.path_data_.Y.size());
   std::vector<double> x_history, y_history;
-  for (int i = 0; i < 100; i++) {
+  for (int i = 0; i < 20; i++) {
     
     Eigen::SparseMatrix<double> x0(mpcc.state_dim_, 1);
     if (i == 0) {
@@ -50,10 +50,13 @@ int main(int argc, char** argv)
     }
     
     // std::cout << i << std::endl;
+    auto start_time = ros::Time::now();
     mpcc.CalculateCost(resample, x0);
     mpcc.SolveQp(x0);
     x_history.emplace_back(x0.coeffRef(0, 0));
     y_history.emplace_back(x0.coeffRef(2, 0));
+    auto end_time = ros::Time::now();
+    std::cout<<(end_time - start_time).toSec()<<std::endl;
   }
   std::vector<double> x_horizon, y_horizon;
   for (int i=0;i<10;i++){

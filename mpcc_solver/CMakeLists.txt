@@ -35,6 +35,7 @@ add_executable(mpcc_node
   src/Spline/cubic_spline.cpp
   src/map/map.cpp
   src/mpcc/mpcc.cpp
+  src/mpcc/constrains.cpp
   src/mpcc/osqp_interface.cpp
   src/referenceline/search.cpp
   src/referenceline/smooth.cpp
