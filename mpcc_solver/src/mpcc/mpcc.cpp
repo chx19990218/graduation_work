@@ -16,6 +16,14 @@ Mpcc::Mpcc() {
   // inputLower = node["inputLower"].as<vector<double>>();
   // displayPtr = new DisplayMsgs(map, horizon);
   // initStatus = true;
+  stage.resize(horizon);
+  stage[0].state[0] = 0.5;
+  stage[0].state[1] = 0.0;
+  stage[0].state[2] = 1.18;
+  stage[0].state[3] = 0.0;
+  stage[0].state[4] = 1.0;
+  stage[0].state[5] = 0.0;
+  stage[0].state[6] = 0.0;
 
   Q.resize(horizon * state_dim_, horizon * state_dim_);
   q.resize(horizon * state_dim_, 1);
@@ -24,7 +32,7 @@ Mpcc::Mpcc() {
 
   Ad.resize(state_dim_, state_dim_);
   std::vector<Eigen::Triplet<double>> triplets;
-  for (int i = 0; i < state_dim_; i++) {
+  for (int i = 0; i < state_dim_-1; i++) {
     triplets.push_back(Eigen::Triplet<double>(i, i, 1));
   }
   triplets.push_back(Eigen::Triplet<double>(0, 1, Ts));
@@ -36,8 +44,8 @@ Mpcc::Mpcc() {
   triplets.clear();
   triplets.push_back(Eigen::Triplet<double>(1, 0, Ts));
   triplets.push_back(Eigen::Triplet<double>(3, 1, Ts));
-  triplets.push_back(Eigen::Triplet<double>(5, 1, Ts));
-  triplets.push_back(Eigen::Triplet<double>(6, 1, 1.0));
+  triplets.push_back(Eigen::Triplet<double>(5, 2, Ts));
+  triplets.push_back(Eigen::Triplet<double>(6, 3, Ts));
   Bd.setFromTriplets(triplets.begin(), triplets.end());
 
   // initialize AA & BB:
@@ -57,6 +65,25 @@ Mpcc::Mpcc() {
   }
   AAT = AA.transpose();
   BBT = BB.transpose();
+  xl.resize(horizon * state_dim_, 1);
+  xu.resize(horizon * state_dim_, 1);
+  Eigen::SparseMatrix<double> stateUs(state_dim_,1);
+  Eigen::SparseMatrix<double> stateLs(state_dim_,1);
+  for (int i = 0; i < state_dim_; i++){
+    stateUs.coeffRef(i,0) = 100.0;
+    stateLs.coeffRef(i,0) = -100.0;
+  }
+  for (int i = 0; i < horizon; i++) {
+    sp::colMajor::setRows(xl, stateLs, state_dim_*i);
+    sp::colMajor::setRows(xu, stateUs, state_dim_*i);
+  }
+  inputPredict.resize(control_dim_, horizon);
+  statePredict.resize(state_dim_, horizon);
+  ul.resize(horizon*control_dim_, 1);
+  uu.resize(horizon*control_dim_, 1);
+  A.resize(0,0);
+  b.resize(0,0);
+
   // In.resize(horizon * numInput, horizon * numInput);
   // A.resize(0, 0);
   // b.resize(0, 0);
@@ -100,9 +127,11 @@ Mpcc::Mpcc() {
   // Inu.setIdentity();
 }
 
-void Mpcc::GetOptimalTheta(std::vector<double>& optimal_theta) {
+
+void Mpcc::GetOptimalTheta() {
+  auto temp = optimal_theta;
   optimal_theta.clear();
-  double v = 1.0;
+  double v = 0.1;
   if (init_status) {
     for (int i = 0; i < horizon; i++) {
       optimal_theta.emplace_back(
@@ -111,17 +140,16 @@ void Mpcc::GetOptimalTheta(std::vector<double>& optimal_theta) {
     }
   } else {
     for (int i = 1; i < horizon; i++) {
-      optimal_theta.emplace_back(stage[i].state.back());
+      optimal_theta.emplace_back(temp[i]);
     }
-    optimal_theta.emplace_back(stage.back().state.back() +
-                               stage.back().u.back() * Ts);
+    optimal_theta.emplace_back(temp.back() +
+                               inputPredict.coeffRef(control_dim_ - 1, horizon - 1) * Ts);
   }
 }
 
-void Mpcc::CalculateCost(const Resample& referenceline) {
+void Mpcc::CalculateCost(const Resample& referenceline, Eigen::SparseMatrix<double>& x0) {
   stage.clear();
-  std::vector<double> optimal_theta;
-  GetOptimalTheta(optimal_theta);
+  GetOptimalTheta();
   for (int i = 0; i < horizon; i++) {
     double theta = optimal_theta[i];  // TODO 考虑闭环，theta跑一圈
     auto pos_xy = referenceline.spline.getPostion(theta);
@@ -132,6 +160,7 @@ void Mpcc::CalculateCost(const Resample& referenceline) {
     double dx_dtheta = vel_xy[0];
     double dy_dtheta = vel_xy[1];
     double dz_dtheta = 0.0;
+    // std::cout<<theta<<","<<x<<","<<y<<","<<dx_dtheta<<","<<dy_dtheta<<std::endl;
 
     double r_x = x - dx_dtheta * theta;
     double r_y = y - dy_dtheta * theta;
@@ -145,28 +174,26 @@ void Mpcc::CalculateCost(const Resample& referenceline) {
     grad_x.coeffRef(6, 0) = -dx_dtheta;
     grad_y.coeffRef(6, 0) = -dy_dtheta;
     grad_z.coeffRef(6, 0) = -dz_dtheta;
-    stage[i].Qn = grad_x * Eigen::SparseMatrix<double>(grad_x.transpose()) +
+    Eigen::SparseMatrix<double> Qn = grad_x * Eigen::SparseMatrix<double>(grad_x.transpose()) +
                   grad_y * Eigen::SparseMatrix<double>(grad_y.transpose()) +
                   grad_z * Eigen::SparseMatrix<double>(grad_z.transpose());
-    stage[i].qn = -2 * r_x * grad_x - 2 * r_y * grad_y - 2 * r_z * grad_z;
+    Eigen::SparseMatrix<double> qn = -2 * r_x * grad_x - 2 * r_y * grad_y - 2 * r_z * grad_z;
+    sp::colMajor::setBlock(Q, Qn, state_dim_ * i, state_dim_ * i);
+    sp::colMajor::setBlock(q, qn, state_dim_ * i, 0);
+    
   }
-
-  // qn.coeffRef(numState - Model::numOrder + 1, 0) = -qVTheta;
-}
-
-void Mpcc::SetMpccParam(Eigen::SparseMatrix<double>& x0) {
-  for (int i = 0; i < horizon; i++) {
-    sp::colMajor::setBlock(Q, stage[i].Qn, state_dim_ * i, state_dim_ * i);
-    sp::colMajor::setBlock(q, stage[i].qn, state_dim_ * i, 0);
-  }
+  
   Eigen::SparseMatrix<double> progress(control_dim_ * horizon, 1);
-  double gamma = 1.0;
+  double gamma = 0.001;
   for (int i = 0; i < horizon; i++) {
     progress.coeffRef(4 * i + 3, 0) = gamma;
   }
-  Q_qp = BBT * Q * BB;
-  c_qp = 2 * BBT * Q * AA * x0 + BBT * q - progress;
+  
+  H = 2 * BBT * Q * BB;
+  // std::cout<<AA<<std::endl;
+  f = 2 * BBT * Q * AA * x0 + BBT * q - progress;
 }
+
 // void MpcSolver::calculateConstrains(Eigen::SparseMatrix<double>& stateTmp,
 //                                     int horizon_) {
 //   assert(stateTmp.rows() == numState);
@@ -219,51 +246,44 @@ void Mpcc::SetMpccParam(Eigen::SparseMatrix<double>& x0) {
 //   sp::colMajor::addBlock(Ck, Cn);
 //   sp::colMajor::addRows(Ckb, Cnb);
 // }
-// void MpcSolver::solveMpcQp(Eigen::SparseMatrix<double>& stateTmp) {
-//   Eigen::SparseMatrix<double> state = stateTmp;
+void Mpcc::SolveQp(Eigen::SparseMatrix<double>& stateTmp) {
+  Eigen::SparseMatrix<double> state = stateTmp;
 
-//   Eigen::SparseMatrix<double> inputPredict1toN =
-//       inputPredict.block(0, 1, numInput, horizon - 1);
-//   sp::colMajor::setCols(inputPredict, inputPredict1toN, 1);
-//   int solveStatus = 1;
-
-//   Ck.resize(0, 0);
-//   Ckb.resize(0, 0);
-
-
-//   double theta = 0;
+  C = BB;
   
+  cupp = xu - Eigen::SparseMatrix<double>(AA*stateTmp);
+  clow = xl - Eigen::SparseMatrix<double>(AA*stateTmp);
 
-//   Q = BBT * Qk * BB;
-//   c = BBT * Qk * AA * stateTmp + BBT * qk;
+  // std::cout<<clow<<std::endl;
+  osqpInterface.updateMatrices(H, f, A, b, C, clow, cupp, ul, uu);
+  osqpInterface.solveQP();
+  auto solveStatus = osqpInterface.solveStatus();
 
-//   C = BB;
+  auto solPtr = osqpInterface.solPtr();
 
-  
 
-//   osqpInterface.updateMatrices(Q, c, A, b, C, clow, cupp, ul, uu);
-//   osqpInterface.solveQP();
-//   solveStatus = osqpInterface.solveStatus();
+  if (solveStatus == OSQP_SOLVED) {
+    optimal_theta.clear();
+    Eigen::SparseMatrix<double> state = stateTmp;
+    
+    stage.clear();
+    for (int i = 0; i < horizon; i++) {
+      for (int j = 0; j < control_dim_; j++) {
+        inputPredict.coeffRef(j, i) = solPtr->x[i*control_dim_+j];
+        // stage[i].u[j] = solPtr->x[i*control_dim_+j];
+      }
+      state = Ad * state + Bd * inputPredict.col(i);
+      sp::colMajor::setCols(statePredict, state, i);
+      // for (int k = 0; k < state_dim_; k++) {
+      //   stage[i].state[i] = state.coeffRef(k, 0);
+      // }
+      optimal_theta.emplace_back(state.coeffRef(6, 0));
+    }
+  } else {
+    std::cout << "no solution" <<std::endl;
+  }
 
-//   auto solPtr = osqpInterface.solPtr();
-//   clock_t t_osqp_over = clock();
-//   double time = (double)(t_osqp_over - t_osqp_start) / CLOCKS_PER_SEC;
-
-//   if (solveStatus == OSQP_SOLVED) {
-
-//     state = stateTmp;
-//     for (int i = 0; i < horizon; ++i) {
-//       for (int j = 0; j < numInput; ++j) {
-//         inputPredict.coeffRef(j, i) = solPtr->x[i * numInput + j];
-//       }
-//       state = model.Ad * state + model.Bd * inputPredict.col(i);
-//       sp::colMajor::setCols(statePredict, state, i);
-//     }
-//   } else {
-
-//   }
-
-//   if (init_status) {
-//     init_status = false;
-//   }
-// };
+  if (init_status) {
+    init_status = false;
+  }
+}
