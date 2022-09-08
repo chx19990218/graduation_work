@@ -63,6 +63,9 @@ class Mpcc {
   Eigen::SparseMatrix<double> cupp;
   Eigen::SparseMatrix<double> A ;
   Eigen::SparseMatrix<double> b ;
+  Eigen::SparseMatrix<double> Cx ;
+  Eigen::SparseMatrix<double> xup ;
+  Eigen::SparseMatrix<double> xlow ;
 
   Eigen::SparseMatrix<double> inputPredict;
   Eigen::SparseMatrix<double> statePredict;
@@ -73,4 +76,12 @@ class Mpcc {
   void CalculateCost(const Resample& referenceline, Eigen::SparseMatrix<double>& x0);
   void GetOptimalTheta();
   void SolveQp(Eigen::SparseMatrix<double>& stateTmp);
+  int GetStage(const Map& map, double x, double y);
+  void GenRec(std::vector<std::vector<double>>& vec,
+            const std::vector<double>& now_outer_point,
+            const std::vector<double>& now_inner_point,
+            const std::vector<double>& next_outer_point,
+            const std::vector<double>& next_inner_point);
+  bool InRec(std::vector<std::vector<double>>& rec, double x, double y);
+  void SetConstrains(const Resample& referenceline, const Map& map);
 };
