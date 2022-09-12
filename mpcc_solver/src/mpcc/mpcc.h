@@ -3,27 +3,26 @@
 
 #pragma once
 
-#include "mpcc.h"
-
 #include <eigen3/Eigen/Dense>
 #include <eigen3/Eigen/Sparse>
-#include "sparse_utils.h"
-#include "resample.h"
+
+#include "mpcc.h"
 #include "osqp_interface.h"
-
-
+#include "resample.h"
+#include "sparse_utils.h"
 
 struct Stage {
-  //x vx y vy z vz theta
+  // x vx y vy z vz theta
   int state_dim_ = 7;
-  //ax ay az v_theta
+  // ax ay az v_theta
   int control_dim_ = 4;
   Eigen::SparseMatrix<double> Qn;
   Eigen::SparseMatrix<double> qn;
   std::vector<double> state;
   std::vector<double> u;
   Stage() {
-    state = std::vector<double>(state_dim_, 0.0);;
+    state = std::vector<double>(state_dim_, 0.0);
+    ;
     u = std::vector<double>(control_dim_, 0.0);
     Qn.resize(state_dim_, state_dim_);
     qn.resize(state_dim_, 1);
@@ -32,15 +31,15 @@ struct Stage {
 
 class Mpcc {
  public:
-  //x vx y vy z vz theta
+  // x vx y vy z vz theta
   int state_dim_ = 7;
-  //ax ay az v_theta
+  // ax ay az v_theta
   int control_dim_ = 4;
   int horizon = 10;
   bool init_status = true;
   double Ts = 0.02;
   double max_theta_;
-  std::vector<Stage> stage;// = std::vector<Stage>(horizon);
+  std::vector<Stage> stage;  // = std::vector<Stage>(horizon);
 
   OSQPInterface osqpInterface;
 
@@ -61,11 +60,11 @@ class Mpcc {
   Eigen::SparseMatrix<double> ul;
   Eigen::SparseMatrix<double> clow;
   Eigen::SparseMatrix<double> cupp;
-  Eigen::SparseMatrix<double> A ;
-  Eigen::SparseMatrix<double> b ;
-  Eigen::SparseMatrix<double> Cx ;
-  Eigen::SparseMatrix<double> xup ;
-  Eigen::SparseMatrix<double> xlow ;
+  Eigen::SparseMatrix<double> A;
+  Eigen::SparseMatrix<double> b;
+  Eigen::SparseMatrix<double> Cx;
+  Eigen::SparseMatrix<double> xup;
+  Eigen::SparseMatrix<double> xlow;
 
   Eigen::SparseMatrix<double> inputPredict;
   Eigen::SparseMatrix<double> statePredict;
@@ -73,15 +72,13 @@ class Mpcc {
   std::vector<double> optimal_theta = std::vector<double>(horizon);
 
   Mpcc();
-  void CalculateCost(const Resample& referenceline, Eigen::SparseMatrix<double>& x0);
-  void GetOptimalTheta();
-  void SolveQp(Eigen::SparseMatrix<double>& stateTmp);
+  void CalculateCost(const Resample& referenceline,
+                     Eigen::SparseMatrix<double>& x0);
+  void GetOptimalTheta(const Resample& referenceline);
+  void SolveQp(Eigen::SparseMatrix<double>& stateTmp,
+               const Resample& referenceline, const Map& map);
   int GetStage(const Map& map, double x, double y);
-  void GenRec(std::vector<std::vector<double>>& vec,
-            const std::vector<double>& now_outer_point,
-            const std::vector<double>& now_inner_point,
-            const std::vector<double>& next_outer_point,
-            const std::vector<double>& next_inner_point);
   bool InRec(std::vector<std::vector<double>>& rec, double x, double y);
-  void SetConstrains(const Resample& referenceline, const Map& map);
+  void SetConstrains(const Resample& referenceline, const Map& map,
+                     Eigen::SparseMatrix<double>& stateTmp);
 };

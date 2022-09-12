@@ -6,6 +6,7 @@
 #include "smooth.h"
 #include "resample.h"
 #include "mpcc.h"
+#include "plot.h"
 
 
 namespace plt = matplotlibcpp;
@@ -25,20 +26,15 @@ int main(int argc, char** argv)
   Smooth smooth;
   Resample resample;
   Mpcc mpcc;
+  Plot plot;
   map.GenerateMap();
   search.SphereSearch(map);
   smooth.Fem(search);
   resample.FitResample(smooth);
-  std::vector<double> plot_xc(map.center_point_x_.data(), map.center_point_x_.data() + map.center_point_x_.size());
-  std::vector<double> plot_yc(map.center_point_y_.data(), map.center_point_y_.data() + map.center_point_y_.size());
-  std::vector<double> plot_xo(map.outer_point_x_.data(), map.outer_point_x_.data() + map.outer_point_x_.size());
-  std::vector<double> plot_yo(map.outer_point_y_.data(), map.outer_point_y_.data() + map.outer_point_y_.size());
-  std::vector<double> plot_xi(map.inner_point_x_.data(), map.inner_point_x_.data() + map.inner_point_x_.size());
-  std::vector<double> plot_yi(map.inner_point_y_.data(), map.inner_point_y_.data() + map.inner_point_y_.size());
-  std::vector<double> plot_x_resample(resample.spline.path_data_.X.data(), resample.spline.path_data_.X.data() + resample.spline.path_data_.X.size());
-  std::vector<double> plot_y_resample(resample.spline.path_data_.Y.data(), resample.spline.path_data_.Y.data() + resample.spline.path_data_.Y.size());
+  
   std::vector<double> x_history, y_history;
-  for (int i = 0; i < 20; i++) {
+  int cnt = 10;
+  for (int i = 0; i < cnt; i++) {
     
     Eigen::SparseMatrix<double> x0(mpcc.state_dim_, 1);
     if (i == 0) {
@@ -48,34 +44,26 @@ int main(int argc, char** argv)
     } else {
       x0 = mpcc.statePredict.col(0);
     }
+    double now_theta = resample.spline.porjectOnSpline(x0.coeffRef(0, 0), x0.coeffRef(2, 0));
+    x0.coeffRef(6, 0) = now_theta;
     
     // std::cout << i << std::endl;
-    auto start_time = ros::Time::now();
+    // auto start_time = ros::Time::now();
+
     mpcc.CalculateCost(resample, x0);
-    mpcc.SolveQp(x0);
+    mpcc.SolveQp(x0, resample, map);
     x_history.emplace_back(x0.coeffRef(0, 0));
     y_history.emplace_back(x0.coeffRef(2, 0));
-    auto end_time = ros::Time::now();
-    std::cout<<(end_time - start_time).toSec()<<std::endl;
+    // auto end_time = ros::Time::now();
+    // std::cout<<(end_time - start_time).toSec()<<std::endl;
   }
   std::vector<double> x_horizon, y_horizon;
-  for (int i=0;i<10;i++){
+  for (int i=0; i<10; i++){
     x_horizon.emplace_back(mpcc.statePredict.coeffRef(0, i));
     y_horizon.emplace_back(mpcc.statePredict.coeffRef(2, i));
   }
 
-
-  plt::figure(1);
-  plt::plot(plot_xc,plot_yc,"r--");
-  plt::plot(plot_xo,plot_yo,"k");
-  plt::plot(plot_xi,plot_yi,"k");
-  // plt::named_plot("search", search.result_x, search.result_y,"p--");
-  // plt::named_plot("smooth", smooth.result_x, smooth.result_y,"y.-");
-  plt::named_plot("fit and resample", plot_x_resample, plot_y_resample,"m--");
-  plt::named_plot("horizon", x_horizon, y_horizon,"p--");
-  plt::named_plot("history", x_history, y_history,"r");
-  plt::legend();
-  plt::show();
+  plot.plot(map, search, smooth, resample, mpcc);
 
 
 

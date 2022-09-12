@@ -33,7 +33,7 @@ public:
     Eigen::Vector2d getDerivative(double) const;
     Eigen::Vector2d getSecondDerivative(double) const;
     double getLength() const;
-    double porjectOnSpline(const State &x) const;
+    double porjectOnSpline(double x, double y) const;
 
     ArcLengthSpline();
 

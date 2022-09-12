@@ -27,6 +27,7 @@ include_directories(
   src/referenceline
   src/matplotlib-cpp
   src/utils
+  src/plot
   /usr/local/include/osqp
 )
 add_executable(mpcc_node 
@@ -35,6 +36,7 @@ add_executable(mpcc_node
   src/Spline/cubic_spline.cpp
   src/map/map.cpp
   src/mpcc/mpcc.cpp
+  src/plot/plot.cpp
   src/mpcc/constrains.cpp
   src/mpcc/osqp_interface.cpp
   src/referenceline/search.cpp

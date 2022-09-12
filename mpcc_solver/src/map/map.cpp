@@ -63,8 +63,10 @@ void Map::GenerateMap() {
   outer_point_y_[center_point_.size()] = outer_point_y_[0];
   inner_point_x_[center_point_.size()] = inner_point_x_[0];
   inner_point_y_[center_point_.size()] = inner_point_y_[0];
-  centerline.gen2DSpline(center_point_x_, center_point_y_);
+
+  CalculateStageRange();
 }
+
 // 拐角分两类:外角/内角
 // 外角：上右下左顺序构成的
 // 内角：右上左下顺序构成的
@@ -114,5 +116,142 @@ VecType Map::GetVecType(Eigen::Vector2d& vec) {
     return VecType::FourthPhase;
   } else {
     return VecType::Error;
+  }
+}
+
+void Map::CalculateStageRange() {
+  int size = center_point_.size();
+  std::vector<double> now_outer_point(2, 0.0);
+  std::vector<double> now_inner_point(2, 0.0);
+  std::vector<double> next_outer_point(2, 0.0);
+  std::vector<double> next_inner_point(2, 0.0);
+  std::vector<std::vector<double>> vec;
+  for (int i = 0; i < size; i++) {
+    now_outer_point[0] = outer_point_x_[i];
+    now_outer_point[1] = outer_point_y_[i];
+    now_inner_point[0] = inner_point_x_[i];
+    now_inner_point[1] = inner_point_y_[i];
+    next_outer_point[0] = outer_point_x_[i + 1];
+    next_outer_point[1] = outer_point_y_[i + 1];
+    next_inner_point[0] = inner_point_x_[i + 1];
+    next_inner_point[1] = inner_point_y_[i + 1];
+    vec.clear();
+    GenRec(vec, now_outer_point, now_inner_point, next_outer_point,
+           next_inner_point);
+    stage.emplace_back(vec);
+  }
+}
+
+// 根据四边形生成矩形，按顺序添加
+void Map::GenRec(std::vector<std::vector<double>>& vec,
+                 const std::vector<double>& now_outer_point,
+                 const std::vector<double>& now_inner_point,
+                 const std::vector<double>& next_outer_point,
+                 const std::vector<double>& next_inner_point) {
+  vec.clear();
+  bool now_flag, next_flag;
+  if (std::abs(now_outer_point[0] - next_outer_point[0]) >
+      std::abs(now_outer_point[1] - next_outer_point[1])) {
+    // 横
+    if ((next_outer_point[0] - now_outer_point[0]) *
+            (now_outer_point[0] - now_inner_point[0]) >
+        0) {
+      vec.emplace_back(now_inner_point);
+      now_flag = true;
+    } else {
+      vec.emplace_back(now_outer_point);
+      now_flag = false;
+    }
+    if ((next_outer_point[0] - now_outer_point[0]) *
+            (next_outer_point[0] - next_inner_point[0]) >
+        0) {
+      vec.emplace_back(next_inner_point);
+      next_flag = true;
+    } else {
+      vec.emplace_back(next_outer_point);
+      next_flag = false;
+    }
+    if (now_flag == next_flag) {
+      // 一条线
+      if (now_flag) {
+        // 里
+        vec.emplace_back(
+            std::vector<double>{next_inner_point[0], now_outer_point[1]});
+        vec.emplace_back(
+            std::vector<double>{now_inner_point[0], now_outer_point[1]});
+      } else {
+        // 外
+        vec.emplace_back(
+            std::vector<double>{next_outer_point[0], now_inner_point[1]});
+        vec.emplace_back(
+            std::vector<double>{now_outer_point[0], now_inner_point[1]});
+      }
+    } else {
+      // 对角
+      if (now_flag) {
+        // 里
+        vec.insert(vec.begin() + 1, std::vector<double>{now_inner_point[0],
+                                                        next_outer_point[1]});
+        vec.emplace_back(
+            std::vector<double>{next_outer_point[0], now_inner_point[1]});
+      } else {
+        // 外
+        vec.insert(vec.begin() + 1, std::vector<double>{now_outer_point[0],
+                                                        next_inner_point[1]});
+        vec.emplace_back(
+            std::vector<double>{next_inner_point[0], now_outer_point[1]});
+      }
+    }
+  } else {
+    // 纵
+    if ((next_outer_point[1] - now_outer_point[1]) *
+            (now_outer_point[1] - now_inner_point[1]) >
+        0) {
+      vec.emplace_back(now_inner_point);
+      now_flag = true;
+    } else {
+      vec.emplace_back(now_outer_point);
+      now_flag = false;
+    }
+    if ((next_outer_point[1] - now_outer_point[1]) *
+            (next_outer_point[1] - next_inner_point[1]) >
+        0) {
+      vec.emplace_back(next_inner_point);
+      next_flag = true;
+    } else {
+      vec.emplace_back(next_outer_point);
+      next_flag = false;
+    }
+    if (now_flag == next_flag) {
+      // 一条线
+      if (now_flag) {
+        // 里
+        vec.emplace_back(
+            std::vector<double>{now_outer_point[0], next_inner_point[1]});
+        vec.emplace_back(
+            std::vector<double>{now_outer_point[0], now_inner_point[1]});
+      } else {
+        // 外
+        vec.emplace_back(
+            std::vector<double>{now_inner_point[0], next_outer_point[1]});
+        vec.emplace_back(
+            std::vector<double>{now_inner_point[0], now_outer_point[1]});
+      }
+    } else {
+      // 对角
+      if (now_flag) {
+        // 里
+        vec.insert(vec.begin() + 1, std::vector<double>{now_inner_point[0],
+                                                        next_outer_point[1]});
+        vec.emplace_back(
+            std::vector<double>{next_outer_point[0], now_inner_point[1]});
+      } else {
+        // 外
+        vec.insert(vec.begin() + 1, std::vector<double>{now_outer_point[0],
+                                                        next_inner_point[1]});
+        vec.emplace_back(
+            std::vector<double>{next_inner_point[0], now_outer_point[1]});
+      }
+    }
   }
 }

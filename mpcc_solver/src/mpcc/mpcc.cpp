@@ -19,7 +19,7 @@ Mpcc::Mpcc() {
   stage.resize(horizon);
   stage[0].state[0] = 0.5;
   stage[0].state[1] = 0.0;
-  stage[0].state[2] = 1.18;
+  stage[0].state[2] = 3.0;
   stage[0].state[3] = 0.0;
   stage[0].state[4] = 1.0;
   stage[0].state[5] = 0.0;
@@ -32,7 +32,7 @@ Mpcc::Mpcc() {
 
   Ad.resize(state_dim_, state_dim_);
   std::vector<Eigen::Triplet<double>> triplets;
-  for (int i = 0; i < state_dim_ - 1; i++) {
+  for (int i = 0; i < state_dim_; i++) {
     triplets.push_back(Eigen::Triplet<double>(i, i, 1));
   }
   triplets.push_back(Eigen::Triplet<double>(0, 1, Ts));
@@ -47,6 +47,7 @@ Mpcc::Mpcc() {
   triplets.push_back(Eigen::Triplet<double>(5, 2, Ts));
   triplets.push_back(Eigen::Triplet<double>(6, 3, Ts));
   Bd.setFromTriplets(triplets.begin(), triplets.end());
+
 
   // initialize AA & BB:
   Eigen::SparseMatrix<double> tmpA = Ad;
@@ -127,17 +128,26 @@ Mpcc::Mpcc() {
   // Inu.setIdentity();
 }
 
-void Mpcc::GetOptimalTheta() {
+void Mpcc::GetOptimalTheta(const Resample& referenceline) {
   auto temp = optimal_theta;
   optimal_theta.clear();
+
+  double start_theta = referenceline.spline.porjectOnSpline(stage[0].state[0], stage[0].state[2]);
+
+  // std::cout << start_theta << "adad" <<std::endl;
   double v = 0.1;
   if (init_status) {
     for (int i = 0; i < horizon; i++) {
       optimal_theta.emplace_back(
-          0.0 +
+          start_theta +
           Ts * v * (i + 1));  // TODO:确定无人机起始位置，然后确定起始theta
     }
   } else {
+    // for (int i=0;i<horizon;i++){
+    //   std::cout<<optimal_theta[i]<<",";
+    // }
+    // std::cout<<std::endl;
+
     for (int i = 1; i < horizon; i++) {
       optimal_theta.emplace_back(std::fmod(temp[i], max_theta_));
     }
@@ -145,13 +155,18 @@ void Mpcc::GetOptimalTheta() {
         temp.back() + inputPredict.coeffRef(control_dim_ - 1, horizon - 1) * Ts,
         max_theta_));
   }
+  for (int i=0;i<horizon;i++){
+    std::cout<<optimal_theta[i]<<",";
+  }
+  // std::cout<<std::endl;
+  // std::cout<<std::endl;
 }
 
 void Mpcc::CalculateCost(const Resample& referenceline,
                          Eigen::SparseMatrix<double>& x0) {
   max_theta_ = referenceline.spline.getLength();
   stage.clear();
-  GetOptimalTheta();
+  GetOptimalTheta(referenceline);
   for (int i = 0; i < horizon; i++) {
     double theta = optimal_theta[i];  // TODO 考虑闭环，theta跑一圈
     auto pos_xy = referenceline.spline.getPostion(theta);
@@ -187,13 +202,12 @@ void Mpcc::CalculateCost(const Resample& referenceline,
   }
 
   Eigen::SparseMatrix<double> progress(control_dim_ * horizon, 1);
-  double gamma = 0.0001;
+  double gamma = 0.001;
   for (int i = 0; i < horizon; i++) {
     progress.coeffRef(4 * i + 3, 0) = gamma;
   }
 
   H = 2 * BBT * Q * BB;
-  // std::cout<<AA<<std::endl;
   f = 2 * BBT * Q * AA * x0 + BBT * q - progress;
 }
 
@@ -249,13 +263,12 @@ void Mpcc::CalculateCost(const Resample& referenceline,
 //   sp::colMajor::addBlock(Ck, Cn);
 //   sp::colMajor::addRows(Ckb, Cnb);
 // }
-void Mpcc::SolveQp(Eigen::SparseMatrix<double>& stateTmp) {
+void Mpcc::SolveQp(Eigen::SparseMatrix<double>& stateTmp,
+                   const Resample& referenceline, const Map& map) {
   Eigen::SparseMatrix<double> state = stateTmp;
-
-  C = BB;
-
-  cupp = xu - Eigen::SparseMatrix<double>(AA * stateTmp);
-  clow = xl - Eigen::SparseMatrix<double>(AA * stateTmp);
+  SetConstrains(referenceline, map, stateTmp);
+  
+  // // clow = xl - Eigen::SparseMatrix<double>(AA * stateTmp);
 
   // std::cout<<clow<<std::endl;
   osqpInterface.updateMatrices(H, f, A, b, C, clow, cupp, ul, uu);
@@ -274,6 +287,8 @@ void Mpcc::SolveQp(Eigen::SparseMatrix<double>& stateTmp) {
         inputPredict.coeffRef(j, i) = solPtr->x[i * control_dim_ + j];
         // stage[i].u[j] = solPtr->x[i*control_dim_+j];
       }
+      // std::cout<<inputPredict.col(i)<<std::endl;
+      // std::cout<<std::endl;
       state = Ad * state + Bd * inputPredict.col(i);
       sp::colMajor::setCols(statePredict, state, i);
       // for (int k = 0; k < state_dim_; k++) {

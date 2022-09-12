@@ -246,31 +246,24 @@ double ArcLengthSpline::getLength() const
     return path_data_.s(path_data_.n_points-1);
 }
 
-double ArcLengthSpline::porjectOnSpline(const State &x) const
+double ArcLengthSpline::porjectOnSpline(double x, double y) const
 {
     Eigen::Vector2d pos;
-    pos(0) = x.x_;
-    pos(1) = x.y_;
-    double s_guess = x.theta_;
-    Eigen::Vector2d pos_path = getPostion(s_guess);
+    pos(0) = x;
+    pos(1) = y;
 
-    double s_opt = s_guess;
-    double dist = (pos-pos_path).norm();
+    // std::cout << "dist too large" << std::endl;
+    Eigen::ArrayXd diff_x_all = path_data_.X.array() - pos(0);
+    Eigen::ArrayXd diff_y_all = path_data_.Y.array() - pos(1);
+    Eigen::ArrayXd dist_square = diff_x_all.square() + diff_y_all.square();
+    std::vector<double> dist_square_vec(dist_square.data(),dist_square.data() + dist_square.size());
+    auto min_iter = std::min_element(dist_square_vec.begin(),dist_square_vec.end());
+    double s_opt = path_data_.s(std::distance(dist_square_vec.begin(), min_iter));
 
-    if (dist >= 0.2)
-    {
-        std::cout << "dist too large" << std::endl;
-        Eigen::ArrayXd diff_x_all = path_data_.X.array() - pos(0);
-        Eigen::ArrayXd diff_y_all = path_data_.Y.array() - pos(1);
-        Eigen::ArrayXd dist_square = diff_x_all.square() + diff_y_all.square();
-        std::vector<double> dist_square_vec(dist_square.data(),dist_square.data() + dist_square.size());
-        auto min_iter = std::min_element(dist_square_vec.begin(),dist_square_vec.end());
-        s_opt = path_data_.s(std::distance(dist_square_vec.begin(), min_iter));
-    }
     double s_old = s_opt;
     for(int i=0; i<20; i++)
     {
-        pos_path = getPostion(s_opt);
+        auto pos_path = getPostion(s_opt);
         Eigen::Vector2d ds_path = getDerivative(s_opt);
         Eigen::Vector2d dds_path = getSecondDerivative(s_opt);
         Eigen::Vector2d diff = pos_path - pos;
@@ -287,5 +280,5 @@ double ArcLengthSpline::porjectOnSpline(const State &x) const
         s_old = s_opt;
     }
     // something is strange if it did not converge within 20 iterations, give back the initial guess
-    return s_guess;
+    return s_opt;
 }
