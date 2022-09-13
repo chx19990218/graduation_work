@@ -193,9 +193,9 @@ void Mpcc::CalculateCost(const Resample& referenceline) {
   }
 
   Eigen::SparseMatrix<double> progress(control_dim_ * horizon, 1);
-  double gamma = 0.05;
+  double gamma = 0.001;
   for (int i = 0; i < horizon; i++) {
-    progress.coeffRef(4 * i + 3, 0) = gamma;
+    progress.coeffRef(4 * i + 3, 0) = gamma/(i+1);
   }
 
   H = 2 * BBT * Q * BB;
@@ -225,6 +225,8 @@ void Mpcc::SolveQp(const Resample& referenceline, const Map& map) {
 
   if (solveStatus == OSQP_SOLVED) {
     optimal_theta.clear();
+    theta_x_.clear();
+    theta_y_.clear();
     Eigen::SparseMatrix<double> state_horizon = state;
 
     for (int i = 0; i < horizon; i++) {
@@ -238,9 +240,12 @@ void Mpcc::SolveQp(const Resample& referenceline, const Map& map) {
       }
       sp::colMajor::setCols(statePredict, state_horizon, i);
 
+      auto pos_theta = referenceline.spline.getPostion(state_horizon.coeffRef(6, 0));
+      theta_x_.emplace_back(pos_theta(0));
+      theta_y_.emplace_back(pos_theta(1));
+
       optimal_theta.emplace_back(state_horizon.coeffRef(6, 0));
     }
-    // std::cout << inputPredict.row(3)<<std::endl;
   } else {
     std::cout << "no solution" << std::endl;
   }

@@ -29,13 +29,6 @@ void Mpcc::SetConstrains(const Resample& referenceline, const Map& map) {
       vec_outer_vertical = std::vector<double>{-vec_outer[1], vec_outer[0]};
       vec_inner_vertical = std::vector<double>{-vec_inner[1], vec_inner[0]};
 
-      // Cx.coeffRef(2 * i, 0 + i * state_dim_) = 1.0;
-      // Cx.coeffRef(2 * i, 2 + i * state_dim_) = 1.0;
-      // xup.coeffRef(2 * i, 0) = 100.0;
-      // Cx.coeffRef(2 * i + 1, 0 + i * state_dim_) = 1.0;
-      // Cx.coeffRef(2 * i + 1, 2 + i * state_dim_) = 1.0;
-      // xup.coeffRef(2 * i + 1, 0) = 100.0;
-
       Cx.coeffRef(2 * i, 0 + i * state_dim_) = vec_outer_vertical[0];
       Cx.coeffRef(2 * i, 2 + i * state_dim_) = vec_outer_vertical[1];
       xup.coeffRef(2 * i, 0) =
@@ -44,13 +37,11 @@ void Mpcc::SetConstrains(const Resample& referenceline, const Map& map) {
       Cx.coeffRef(2 * i + 1, 0 + i * state_dim_) = vec_inner_vertical[0];
       Cx.coeffRef(2 * i + 1, 2 + i * state_dim_) = vec_inner_vertical[1];
       xup.coeffRef(2 * i + 1, 0) =
-          map.inner_point_x_[stage_index] * vec_inner_vertical[0] +
-          map.inner_point_y_[stage_index] * vec_inner_vertical[1];
+          map.inner_point_x_[stage_index+1] * vec_inner_vertical[0] +
+          map.inner_point_y_[stage_index+1] * vec_inner_vertical[1];
     }
   }
-  // std::cout<<map.inner_point_x_[stage_index]<<","<<map.inner_point_y_[stage_index]<<","<<map.outer_point_x_[stage_index]<<","<<map.outer_point_y_[stage_index]<<std::endl;
-  // std::cout << vec_outer_vertical[0] << vec_outer_vertical[1]
-  //               << vec_inner_vertical[0] << vec_inner_vertical[1] << std::endl;
+  std::cout<<vec_outer_vertical[0]<<","<<vec_outer_vertical[1]<<","<<vec_inner_vertical[0]<<","<<vec_inner_vertical[1]<<std::endl;
 
   // 速度限制
   // TODO
@@ -79,7 +70,7 @@ void Mpcc::SetConstrains(const Resample& referenceline, const Map& map) {
     Eigen::SparseMatrix<double> Ck3(1, horizon * control_dim_);
     Eigen::SparseMatrix<double> xupk3(1, 1);
     Ck3.coeffRef(0, i * control_dim_ + 3) = 1.0;
-    xupk3.coeffRef(0, 0) = 10.0;
+    xupk3.coeffRef(0, 0) = 3.0;
     sp::colMajor::addRows(C, Ck3);
     sp::colMajor::addRows(cupp, xupk3);
   }

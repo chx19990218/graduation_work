@@ -33,7 +33,7 @@ int main(int argc, char** argv)
   resample.FitResample(smooth);
   
   
-  int cnt = 300;
+  int cnt = 1000;
   mpcc.Init(resample);
   for (int i = 0; i < cnt; i++) { 
     mpcc.SolveQp(resample, map);
