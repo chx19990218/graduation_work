@@ -32,35 +32,20 @@ int main(int argc, char** argv)
   smooth.Fem(search);
   resample.FitResample(smooth);
   
-  std::vector<double> x_history, y_history;
-  int cnt = 10;
-  for (int i = 0; i < cnt; i++) {
-    
-    Eigen::SparseMatrix<double> x0(mpcc.state_dim_, 1);
-    if (i == 0) {
-      for (int k = 0; k < mpcc.state_dim_; k++) {
-        x0.coeffRef(k, 0) = mpcc.stage[0].state[k];
-      }
-    } else {
-      x0 = mpcc.statePredict.col(0);
-    }
-    double now_theta = resample.spline.porjectOnSpline(x0.coeffRef(0, 0), x0.coeffRef(2, 0));
-    x0.coeffRef(6, 0) = now_theta;
-    
-    // std::cout << i << std::endl;
-    // auto start_time = ros::Time::now();
+  
+  int cnt = 300;
+  mpcc.Init(resample);
+  for (int i = 0; i < cnt; i++) { 
+    mpcc.SolveQp(resample, map);
 
-    mpcc.CalculateCost(resample, x0);
-    mpcc.SolveQp(x0, resample, map);
-    x_history.emplace_back(x0.coeffRef(0, 0));
-    y_history.emplace_back(x0.coeffRef(2, 0));
-    // auto end_time = ros::Time::now();
-    // std::cout<<(end_time - start_time).toSec()<<std::endl;
+    mpcc.x_history.emplace_back(mpcc.state.coeffRef(0, 0));
+    mpcc.y_history.emplace_back(mpcc.state.coeffRef(2, 0));
+
   }
-  std::vector<double> x_horizon, y_horizon;
-  for (int i=0; i<10; i++){
-    x_horizon.emplace_back(mpcc.statePredict.coeffRef(0, i));
-    y_horizon.emplace_back(mpcc.statePredict.coeffRef(2, i));
+  
+  for (int i=0; i<mpcc.horizon; i++){
+    mpcc.x_horizon.emplace_back(mpcc.statePredict.coeffRef(0, i));
+    mpcc.y_horizon.emplace_back(mpcc.statePredict.coeffRef(2, i));
   }
 
   plot.plot(map, search, smooth, resample, mpcc);

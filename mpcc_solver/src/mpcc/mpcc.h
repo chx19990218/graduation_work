@@ -35,7 +35,7 @@ class Mpcc {
   int state_dim_ = 7;
   // ax ay az v_theta
   int control_dim_ = 4;
-  int horizon = 10;
+  int horizon = 15;
   bool init_status = true;
   double Ts = 0.02;
   double max_theta_;
@@ -70,15 +70,17 @@ class Mpcc {
   Eigen::SparseMatrix<double> statePredict;
 
   std::vector<double> optimal_theta = std::vector<double>(horizon);
+  Eigen::SparseMatrix<double> state;
+  std::vector<double> x_history, y_history;
+  std::vector<double> x_horizon, y_horizon;
 
   Mpcc();
-  void CalculateCost(const Resample& referenceline,
-                     Eigen::SparseMatrix<double>& x0);
+  void Init(const Resample& referenceline);
+  void UpdateState(const Resample& referenceline);
+  void CalculateCost(const Resample& referenceline);
   void GetOptimalTheta(const Resample& referenceline);
-  void SolveQp(Eigen::SparseMatrix<double>& stateTmp,
-               const Resample& referenceline, const Map& map);
+  void SolveQp(const Resample& referenceline, const Map& map);
   int GetStage(const Map& map, double x, double y);
   bool InRec(std::vector<std::vector<double>>& rec, double x, double y);
-  void SetConstrains(const Resample& referenceline, const Map& map,
-                     Eigen::SparseMatrix<double>& stateTmp);
+  void SetConstrains(const Resample& referenceline, const Map& map);
 };

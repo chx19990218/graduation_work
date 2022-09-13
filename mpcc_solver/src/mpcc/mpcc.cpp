@@ -16,14 +16,7 @@ Mpcc::Mpcc() {
   // inputLower = node["inputLower"].as<vector<double>>();
   // displayPtr = new DisplayMsgs(map, horizon);
   // initStatus = true;
-  stage.resize(horizon);
-  stage[0].state[0] = 0.5;
-  stage[0].state[1] = 0.0;
-  stage[0].state[2] = 3.0;
-  stage[0].state[3] = 0.0;
-  stage[0].state[4] = 1.0;
-  stage[0].state[5] = 0.0;
-  stage[0].state[6] = 0.0;
+  state.resize(state_dim_, 1);
 
   Q.resize(horizon * state_dim_, horizon * state_dim_);
   q.resize(horizon * state_dim_, 1);
@@ -48,7 +41,6 @@ Mpcc::Mpcc() {
   triplets.push_back(Eigen::Triplet<double>(6, 3, Ts));
   Bd.setFromTriplets(triplets.begin(), triplets.end());
 
-
   // initialize AA & BB:
   Eigen::SparseMatrix<double> tmpA = Ad;
   Eigen::SparseMatrix<double> tmpB(state_dim_, horizon * control_dim_);
@@ -66,24 +58,24 @@ Mpcc::Mpcc() {
   }
   AAT = AA.transpose();
   BBT = BB.transpose();
-  xl.resize(horizon * state_dim_, 1);
-  xu.resize(horizon * state_dim_, 1);
-  Eigen::SparseMatrix<double> stateUs(state_dim_, 1);
-  Eigen::SparseMatrix<double> stateLs(state_dim_, 1);
-  for (int i = 0; i < state_dim_; i++) {
-    stateUs.coeffRef(i, 0) = 100.0;
-    stateLs.coeffRef(i, 0) = -100.0;
-  }
-  for (int i = 0; i < horizon; i++) {
-    sp::colMajor::setRows(xl, stateLs, state_dim_ * i);
-    sp::colMajor::setRows(xu, stateUs, state_dim_ * i);
-  }
+  // xl.resize(horizon * state_dim_, 1);
+  // xu.resize(horizon * state_dim_, 1);
+  // Eigen::SparseMatrix<double> stateUs(state_dim_, 1);
+  // Eigen::SparseMatrix<double> stateLs(state_dim_, 1);
+  // for (int i = 0; i < state_dim_; i++) {
+  //   stateUs.coeffRef(i, 0) = 100.0;
+  //   stateLs.coeffRef(i, 0) = -100.0;
+  // }
+  // for (int i = 0; i < horizon; i++) {
+  //   sp::colMajor::setRows(xl, stateLs, state_dim_ * i);
+  //   sp::colMajor::setRows(xu, stateUs, state_dim_ * i);
+  // }
   inputPredict.resize(control_dim_, horizon);
   statePredict.resize(state_dim_, horizon);
-  ul.resize(horizon * control_dim_, 1);
-  uu.resize(horizon * control_dim_, 1);
-  A.resize(0, 0);
-  b.resize(0, 0);
+  // ul.resize(horizon * control_dim_, 1);
+  // uu.resize(horizon * control_dim_, 1);
+  // A.resize(0, 0);
+  // b.resize(0, 0);
 
   // In.resize(horizon * numInput, horizon * numInput);
   // A.resize(0, 0);
@@ -128,45 +120,44 @@ Mpcc::Mpcc() {
   // Inu.setIdentity();
 }
 
+void Mpcc::Init(const Resample& referenceline) {
+  max_theta_ = referenceline.spline.getLength();
+
+  state.coeffRef(0, 0) = 0.5;
+  state.coeffRef(2, 0) = 3.0;
+  state.coeffRef(4, 0) = 1.0;
+  UpdateState(referenceline);
+  
+  optimal_theta.clear();
+  double v = 1.0;
+  for (int i = 0; i < horizon; i++) {
+    optimal_theta.emplace_back(state.coeffRef(6, 0) + Ts * v * i);
+  }
+}
+
+void Mpcc::UpdateState(const Resample& referenceline) {
+  double now_x = state.coeffRef(0, 0);
+  double now_y = state.coeffRef(2, 0);
+  double now_theta = referenceline.spline.porjectOnSpline(now_x, now_y);
+  state.coeffRef(6, 0) = now_theta;
+}
+
 void Mpcc::GetOptimalTheta(const Resample& referenceline) {
   auto temp = optimal_theta;
   optimal_theta.clear();
-
-  double start_theta = referenceline.spline.porjectOnSpline(stage[0].state[0], stage[0].state[2]);
-
-  // std::cout << start_theta << "adad" <<std::endl;
   double v = 0.1;
-  if (init_status) {
-    for (int i = 0; i < horizon; i++) {
-      optimal_theta.emplace_back(
-          start_theta +
-          Ts * v * (i + 1));  // TODO:确定无人机起始位置，然后确定起始theta
-    }
-  } else {
-    // for (int i=0;i<horizon;i++){
-    //   std::cout<<optimal_theta[i]<<",";
-    // }
-    // std::cout<<std::endl;
-
-    for (int i = 1; i < horizon; i++) {
-      optimal_theta.emplace_back(std::fmod(temp[i], max_theta_));
-    }
-    optimal_theta.emplace_back(std::fmod(
-        temp.back() + inputPredict.coeffRef(control_dim_ - 1, horizon - 1) * Ts,
-        max_theta_));
+  for (int i = 1; i < horizon; i++) {
+    optimal_theta.emplace_back(std::fmod(temp[i], max_theta_));
   }
-  for (int i=0;i<horizon;i++){
-    std::cout<<optimal_theta[i]<<",";
-  }
-  // std::cout<<std::endl;
+  optimal_theta.emplace_back(std::fmod(
+      2*temp.back() - temp.rbegin()[1], max_theta_));
+  // for(int i=0;i<horizon;i++){
+  //   std::cout<<optimal_theta[i];
+  // }
   // std::cout<<std::endl;
 }
 
-void Mpcc::CalculateCost(const Resample& referenceline,
-                         Eigen::SparseMatrix<double>& x0) {
-  max_theta_ = referenceline.spline.getLength();
-  stage.clear();
-  GetOptimalTheta(referenceline);
+void Mpcc::CalculateCost(const Resample& referenceline) {
   for (int i = 0; i < horizon; i++) {
     double theta = optimal_theta[i];  // TODO 考虑闭环，theta跑一圈
     auto pos_xy = referenceline.spline.getPostion(theta);
@@ -202,75 +193,30 @@ void Mpcc::CalculateCost(const Resample& referenceline,
   }
 
   Eigen::SparseMatrix<double> progress(control_dim_ * horizon, 1);
-  double gamma = 0.001;
+  double gamma = 0.05;
   for (int i = 0; i < horizon; i++) {
     progress.coeffRef(4 * i + 3, 0) = gamma;
   }
 
   H = 2 * BBT * Q * BB;
-  f = 2 * BBT * Q * AA * x0 + BBT * q - progress;
+  f = 2 * BBT * Q * AA * state + BBT * q - progress;
+  // std::cout<<H<<std::endl;
+  // std::cout<<f<<std::endl;
 }
 
-// void MpcSolver::calculateConstrains(Eigen::SparseMatrix<double>& stateTmp,
-//                                     int horizon_) {
-//   assert(stateTmp.rows() == numState);
-//   double theta_ = stateTmp.coeffRef(numState - Model::numOrder, 0);
-//   double theta = std::fmod(theta_ + map.thetaMax, map.thetaMax);
-//   // double theta = theta_>map.thetaMax ? map.thetaMax:theta_;
-//   int numConstrains = 0;
-//   Polyhedron chosenPoly;
-//   if (theta < 1e-6) {
-//     theta = 1e-6;
-//   }
-//   Eigen::Vector3d position, tangentLine;
-//   map.getGlobalCommand(theta, position, tangentLine);
+void Mpcc::SolveQp(const Resample& referenceline, const Map& map) {
+  UpdateState(referenceline);
+  GetOptimalTheta(referenceline);
+  SetConstrains(referenceline, map);
+  CalculateCost(referenceline);
 
-//   // find the max Polyhedron intersecting theta face
-//   double maxArea = 0;
-//   // cout << "theta: " << stateTmp.coeffRef(7,0) << endl;
-//   // find tunnel for this horizon:
-//   for (int i = 0; i < map.corridor.polys.size(); ++i) {
-//     bool inThisPoly = false;
-//     for (int k = 0; k < map.corridor.polys[i].starter.size(); ++k) {
-//       bool in = theta >= map.corridor.polys[i].starter[k] &&
-//                 theta <= map.corridor.polys[i].ender[k];
-//       inThisPoly = inThisPoly || in;
-//     }
-//     if (inThisPoly) {
-//       // std::cout << "polyindex: " << i << std::endl;
-//       // cout << "pos: " << position.transpose() << endl;
-//       // cout << "tan: " << tangentLine.transpose() << endl;
-//       // cout << "i: " << i << endl;
-//       map.corridor.FindPolygon(position, tangentLine, i);
-//       if (maxArea < map.corridor.tunnelArea) {
-//         maxArea = map.corridor.tunnelArea;
-//         chosenPoly = map.corridor.tunnel;
-//       }
-//       // std::cout << "area: " << maxArea << endl;
-//     }
-//   }
-//   displayPtr->displayOneTunnel(horizon_, theta);
-//   numConstrains = chosenPoly.rows();
+  clow.resize(5*horizon, 1);
+  for(int i=0;i<5*horizon;i++){
+    clow.coeffRef(i, 0) = -100;
+  }
 
-//   Cn.resize(numConstrains, numState);
-//   Cnb.resize(numConstrains, 1);
-//   for (int i = 0; i < numConstrains; ++i) {
-//     for (int j = 0; j < Model::numDimention; ++j) {
-//       Cn.coeffRef(i, Model::numOrder * j) = chosenPoly(i, j);
-//     }
-//     Cnb.coeffRef(i, 0) = chosenPoly(i, 3);
-//   }
-//   sp::colMajor::addBlock(Ck, Cn);
-//   sp::colMajor::addRows(Ckb, Cnb);
-// }
-void Mpcc::SolveQp(Eigen::SparseMatrix<double>& stateTmp,
-                   const Resample& referenceline, const Map& map) {
-  Eigen::SparseMatrix<double> state = stateTmp;
-  SetConstrains(referenceline, map, stateTmp);
-  
-  // // clow = xl - Eigen::SparseMatrix<double>(AA * stateTmp);
-
-  // std::cout<<clow<<std::endl;
+  // // cupp.resize(50, 1);
+  // // C.resize(50, 40);
   osqpInterface.updateMatrices(H, f, A, b, C, clow, cupp, ul, uu);
   osqpInterface.solveQP();
   auto solveStatus = osqpInterface.solveStatus();
@@ -279,28 +225,23 @@ void Mpcc::SolveQp(Eigen::SparseMatrix<double>& stateTmp,
 
   if (solveStatus == OSQP_SOLVED) {
     optimal_theta.clear();
-    Eigen::SparseMatrix<double> state = stateTmp;
+    Eigen::SparseMatrix<double> state_horizon = state;
 
-    stage.clear();
     for (int i = 0; i < horizon; i++) {
       for (int j = 0; j < control_dim_; j++) {
         inputPredict.coeffRef(j, i) = solPtr->x[i * control_dim_ + j];
-        // stage[i].u[j] = solPtr->x[i*control_dim_+j];
       }
-      // std::cout<<inputPredict.col(i)<<std::endl;
-      // std::cout<<std::endl;
-      state = Ad * state + Bd * inputPredict.col(i);
-      sp::colMajor::setCols(statePredict, state, i);
-      // for (int k = 0; k < state_dim_; k++) {
-      //   stage[i].state[i] = state.coeffRef(k, 0);
-      // }
-      optimal_theta.emplace_back(state.coeffRef(6, 0));
+
+      state_horizon = Ad * state_horizon + Bd * inputPredict.col(i);
+      if (i == 0) {
+        state = state_horizon;
+      }
+      sp::colMajor::setCols(statePredict, state_horizon, i);
+
+      optimal_theta.emplace_back(state_horizon.coeffRef(6, 0));
     }
+    // std::cout << inputPredict.row(3)<<std::endl;
   } else {
     std::cout << "no solution" << std::endl;
-  }
-
-  if (init_status) {
-    init_status = false;
   }
 }
