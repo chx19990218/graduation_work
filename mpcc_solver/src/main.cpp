@@ -16,7 +16,7 @@ int main(int argc, char** argv)
   ros::NodeHandle n;
   ros::NodeHandle nh("~");
 
-  ros::Rate rate(100);
+  ros::Rate rate(10);
 
   // State state;
   // Input input;
@@ -33,7 +33,7 @@ int main(int argc, char** argv)
   resample.FitResample(smooth);
   
   
-  int cnt = 1000;
+  int cnt = 2;
   mpcc.Init(resample);
   for (int i = 0; i < cnt; i++) { 
     mpcc.SolveQp(resample, map);

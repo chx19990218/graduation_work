@@ -12,29 +12,25 @@
 #include "sparse_utils.h"
 
 struct Stage {
-  // x vx y vy z vz theta
-  int state_dim_ = 7;
-  // ax ay az v_theta
-  int control_dim_ = 4;
-  Eigen::SparseMatrix<double> Qn;
-  Eigen::SparseMatrix<double> qn;
+  // x vx y vy theta
+  int state_dim_ = 5;
+  // ax ay v_theta
+  int control_dim_ = 3;
+
   std::vector<double> state;
   std::vector<double> u;
-  Stage() {
-    state = std::vector<double>(state_dim_, 0.0);
-    ;
-    u = std::vector<double>(control_dim_, 0.0);
-    Qn.resize(state_dim_, state_dim_);
-    qn.resize(state_dim_, 1);
-  };
+
+  Stage(std::vector<double> state_) {
+    state = state_;
+  }
 };
 
 class Mpcc {
  public:
   // x vx y vy z vz theta
-  int state_dim_ = 7;
+  int state_dim_ = 5;
   // ax ay az v_theta
-  int control_dim_ = 4;
+  int control_dim_ = 3;
   int horizon = 20;
   bool init_status = true;
   double Ts = 0.02;
@@ -80,9 +76,15 @@ class Mpcc {
   void Init(const Resample& referenceline);
   void UpdateState(const Resample& referenceline);
   void CalculateCost(const Resample& referenceline);
-  void GetOptimalTheta(const Resample& referenceline);
+  void RecedeOneHorizon(const Resample& referenceline);
   void SolveQp(const Resample& referenceline, const Map& map);
   int GetStage(const Map& map, double x, double y);
   bool InRec(std::vector<std::vector<double>>& rec, double x, double y);
   void SetConstrains(const Resample& referenceline, const Map& map);
+  void GetRefPoint(const Resample& referenceline, const double s,
+                   std::vector<double>& ref_point);
+  void GetErrorInfo(const Resample& referenceline, const Stage& stage,
+                        std::vector<double>& error,
+                        Eigen::SparseMatrix<double>& dEc,
+                        Eigen::SparseMatrix<double>& dEl);
 };

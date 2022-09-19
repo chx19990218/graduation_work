@@ -41,7 +41,7 @@ void Mpcc::SetConstrains(const Resample& referenceline, const Map& map) {
           map.inner_point_y_[stage_index+1] * vec_inner_vertical[1];
     }
   }
-  std::cout<<vec_outer_vertical[0]<<","<<vec_outer_vertical[1]<<","<<vec_inner_vertical[0]<<","<<vec_inner_vertical[1]<<std::endl;
+  // std::cout<<vec_outer_vertical[0]<<","<<vec_outer_vertical[1]<<","<<vec_inner_vertical[0]<<","<<vec_inner_vertical[1]<<std::endl;
 
   // 速度限制
   // TODO
@@ -60,6 +60,7 @@ void Mpcc::SetConstrains(const Resample& referenceline, const Map& map) {
     sp::colMajor::addRows(C, Ck1);
     sp::colMajor::addRows(cupp, xupk1);
 
+
     Eigen::SparseMatrix<double> Ck2(1, horizon * control_dim_);
     Eigen::SparseMatrix<double> xupk2(1, 1);
     Ck2.coeffRef(0, i * control_dim_ + 1) = 1.0;
@@ -69,12 +70,25 @@ void Mpcc::SetConstrains(const Resample& referenceline, const Map& map) {
 
     Eigen::SparseMatrix<double> Ck3(1, horizon * control_dim_);
     Eigen::SparseMatrix<double> xupk3(1, 1);
-    Ck3.coeffRef(0, i * control_dim_ + 3) = 1.0;
+    Ck3.coeffRef(0, i * control_dim_ + control_dim_ - 1) = 1.0;
     xupk3.coeffRef(0, 0) = 3.0;
     sp::colMajor::addRows(C, Ck3);
     sp::colMajor::addRows(cupp, xupk3);
+
+    Eigen::SparseMatrix<double> Ck4(1, horizon * control_dim_);
+    Eigen::SparseMatrix<double> xupk4(1, 1);
+    Ck4.coeffRef(0, i * control_dim_ + 0) = -1.0;
+    xupk4.coeffRef(0, 0) = max_a;
+    sp::colMajor::addRows(C, Ck4);
+    sp::colMajor::addRows(cupp, xupk4);
+
+    Eigen::SparseMatrix<double> Ck5(1, horizon * control_dim_);
+    Eigen::SparseMatrix<double> xupk5(1, 1);
+    Ck5.coeffRef(0, i * control_dim_ + 1) = -1.0;
+    xupk5.coeffRef(0, 0) = max_a;
+    sp::colMajor::addRows(C, Ck5);
+    sp::colMajor::addRows(cupp, xupk5);
   }
-  // std::cout << C << std::endl;
 }
 
 int Mpcc::GetStage(const Map& map, double x, double y) {
