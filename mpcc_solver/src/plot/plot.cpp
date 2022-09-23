@@ -64,6 +64,14 @@ void Plot::plot(const Map& map, const Search& search, const Smooth& smooth,
   Option option9(color_map[Red], line_map[Seven]);
   plt::plot(mpcc.theta_x_, mpcc.theta_y_, option9.color_ + option9.line_);
 
+  // std::vector<double> x, y;
+  // for(int i=0;i<mpcc.horizon;i++){
+  //   x.emplace_back(mpcc.stage[i].state[0]);
+  //   y.emplace_back(mpcc.stage[i].state[2]);
+  // }
+  // Option option10(color_map[Yellow], line_map[Seven]);
+  // plt::plot(x, y, option10.color_ + option10.line_);
+
   plt::legend();
   plt::show();
 }

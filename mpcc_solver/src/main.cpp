@@ -33,9 +33,12 @@ int main(int argc, char** argv)
   resample.FitResample(smooth);
   
   
-  int cnt = 2;
+  int cnt = 50;
   mpcc.Init(resample);
   for (int i = 0; i < cnt; i++) { 
+    if (i % 10 == 0){
+      std::cout<<"sim times:"<<i<<std::endl;
+    } 
     mpcc.SolveQp(resample, map);
 
     mpcc.x_history.emplace_back(mpcc.state.coeffRef(0, 0));

@@ -31,7 +31,7 @@ class Mpcc {
   int state_dim_ = 5;
   // ax ay az v_theta
   int control_dim_ = 3;
-  int horizon = 20;
+  int horizon = 10;
   bool init_status = true;
   double Ts = 0.02;
   double max_theta_;
@@ -40,6 +40,7 @@ class Mpcc {
   OSQPInterface osqpInterface;
 
   Eigen::SparseMatrix<double> Q;
+  Eigen::SparseMatrix<double> identity;
   Eigen::SparseMatrix<double> q;
   Eigen::SparseMatrix<double> Ad;
   Eigen::SparseMatrix<double> Bd;
