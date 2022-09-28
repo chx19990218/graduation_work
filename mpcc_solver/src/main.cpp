@@ -33,14 +33,16 @@ int main(int argc, char** argv)
   resample.FitResample(smooth);
   
   
-  int cnt = 50;
+  int cnt = 10;
   mpcc.Init(resample);
   for (int i = 0; i < cnt; i++) { 
     if (i % 10 == 0){
       std::cout<<"sim times:"<<i<<std::endl;
     } 
+    auto start_time = ros::Time::now();
     mpcc.SolveQp(resample, map);
-
+    auto end_time = ros::Time::now();
+    std::cout << (end_time - start_time).toSec() << std::endl;
     mpcc.x_history.emplace_back(mpcc.state.coeffRef(0, 0));
     mpcc.y_history.emplace_back(mpcc.state.coeffRef(2, 0));
 

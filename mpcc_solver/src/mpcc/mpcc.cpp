@@ -4,18 +4,6 @@
 #include "mpcc.h"
 
 Mpcc::Mpcc() {
-  // std::string path =
-  //     ros::package::getPath("cmpcc") + "/config/mpcParameters.yaml";
-  // YAML::Node node = YAML::LoadFile(path);
-  // horizon = node["horizon"].as<int>();
-  // corridorConstrains = node["corridorConstrains"].as<int>();
-  // qVTheta = node["qVTheta"].as<double>();
-  // stateUpper = node["stateUpper"].as<vector<double>>();
-  // stateLower = node["stateLower"].as<vector<double>>();
-  // inputUpper = node["inputUpper"].as<vector<double>>();
-  // inputLower = node["inputLower"].as<vector<double>>();
-  // displayPtr = new DisplayMsgs(map, horizon);
-  // initStatus = true;
   state.resize(state_dim_, 1);
 
   Q.resize(horizon * state_dim_, horizon * state_dim_);
@@ -72,7 +60,7 @@ void Mpcc::Init(const Resample& referenceline) {
   UpdateState(referenceline);
 
   optimal_theta.clear();
-  double v = 5.0;
+  double v = 1.0;
   double a = v / (Ts * horizon);
   double x, y, theta;
   for (int i = 0; i < horizon; i++) {
@@ -87,12 +75,7 @@ void Mpcc::Init(const Resample& referenceline) {
     stage.emplace_back(stage_i);
     optimal_theta.emplace_back(theta);
   }
-  // state.coeffRef(0, 0) = stage[0].state[0];
-  // state.coeffRef(2, 0) = stage[0].state[2];
-  // for(int i=0;i<horizon;i++){
-  //   std::cout<<stage[i].state[2];
-  // }
-  // std::cout<<std::endl;
+
 }
 
 void Mpcc::UpdateState(const Resample& referenceline) {
@@ -103,13 +86,9 @@ void Mpcc::UpdateState(const Resample& referenceline) {
 }
 
 void Mpcc::RecedeOneHorizon(const Resample& referenceline) {
-  optimal_theta.erase(optimal_theta.begin());
   optimal_theta.emplace_back(std::fmod(
       2 * optimal_theta.back() - optimal_theta.rbegin()[1], max_theta_));
-
-  auto pos_xy = referenceline.spline.getPostion(optimal_theta.back());
-  // double x = pos_xy[0];
-  // double y = pos_xy[1];
+  optimal_theta.erase(optimal_theta.begin());
 
   double x = 2 * stage.back().state[0] - stage.rbegin()[1].state[0];
   double y = 2 * stage.back().state[2] - stage.rbegin()[1].state[2];
@@ -124,78 +103,70 @@ void Mpcc::RecedeOneHorizon(const Resample& referenceline) {
 }
 
 void Mpcc::CalculateCost(const Resample& referenceline) {
-  double Qc = 10.0;
-  double Ql = 100.0;
-  double gamma = 0.01;
+  double Qc = 20.0;
+  double Ql = 50.0;
+  double gamma = 0.1;
+  Eigen::SparseMatrix<double> Qn;
+  Eigen::SparseMatrix<double> qn;
   for (int i = 0; i < horizon; i++) {
-    double theta = optimal_theta[i];  // TODO 考虑闭环，theta跑一圈
-    auto pos_xy = referenceline.spline.getPostion(theta);
-    auto vel_xy = referenceline.spline.getDerivative(theta);
-    double x = pos_xy[0];
-    double y = pos_xy[1];
+    if (false) {
+      double theta = optimal_theta[i];  // TODO 考虑闭环，theta跑一圈
+      auto pos_xy = referenceline.spline.getPostion(theta);
+      auto vel_xy = referenceline.spline.getDerivative(theta);
+      double x = pos_xy[0];
+      double y = pos_xy[1];
 
-    double dx_dtheta = vel_xy[0];
-    double dy_dtheta = vel_xy[1];
+      double dx_dtheta = vel_xy[0];
+      double dy_dtheta = vel_xy[1];
 
-    double r_x = x - dx_dtheta * theta;
-    double r_y = y - dy_dtheta * theta;
+      double r_x = x - dx_dtheta * theta;
+      double r_y = y - dy_dtheta * theta;
 
-    Eigen::SparseMatrix<double> grad_x(state_dim_, 1);
-    Eigen::SparseMatrix<double> grad_y(state_dim_, 1);
+      Eigen::SparseMatrix<double> grad_x(state_dim_, 1);
+      Eigen::SparseMatrix<double> grad_y(state_dim_, 1);
 
-    grad_x.coeffRef(0, 0) = 1.0;
-    grad_y.coeffRef(2, 0) = 1.0;
+      grad_x.coeffRef(0, 0) = 1.0;
+      grad_y.coeffRef(2, 0) = 1.0;
 
-    grad_x.coeffRef(state_dim_ - 1, 0) = -dx_dtheta;
-    grad_y.coeffRef(state_dim_ - 1, 0) = -dy_dtheta;
+      grad_x.coeffRef(state_dim_ - 1, 0) = -dx_dtheta;
+      grad_y.coeffRef(state_dim_ - 1, 0) = -dy_dtheta;
 
-    Eigen::SparseMatrix<double> Qn =
-        grad_x * Eigen::SparseMatrix<double>(grad_x.transpose()) +
-        grad_y * Eigen::SparseMatrix<double>(grad_y.transpose());
-    Eigen::SparseMatrix<double> qn = -2 * r_x * grad_x - 2 * r_y * grad_y;
-
-    // Eigen::SparseMatrix<double> X(state_dim_, 1);
-    // for (int j = 0; j < state_dim_; j++) {
-    //   X.coeffRef(j, 0) = stage[i].state[j];
-    // }
-    // // std::cout<<stage[i].state[0]<<","<<stage[i].state[2]<<std::endl;
-    // std::vector<double> error(2, 0.0);
-    // Eigen::SparseMatrix<double> dEc(1, state_dim_);
-    // Eigen::SparseMatrix<double> dEl(1, state_dim_);
-    // GetErrorInfo(referenceline, stage[i], error, dEc, dEl);
-    // double gain = 1.0;
-    // if (i < horizon - 1) {
-    //   gain = 1.0;
-    // } else {
-    //   gain = 10.0;
-    // }
-    // Eigen::SparseMatrix<double> Qn =
-    //     2 * Eigen::SparseMatrix<double>(dEc.transpose()) * gain * Qc * dEc +
-    //     2 * Eigen::SparseMatrix<double>(dEl.transpose()) * Ql * dEl;
-    // // std::cout<<error[0]<<","<<error[1]<<std::endl;
-    // // std::cout<<dEc<<std::endl;
-    // // std::cout<<dEl<<std::endl;
-    // Eigen::SparseMatrix<double> c = dEc * X;
-    // Eigen::SparseMatrix<double> l = dEl * X;
-    // Eigen::SparseMatrix<double> qn =
-    //     2 * gain * Qc * (error[0] - c.coeffRef(0, 0)) *
-    //         Eigen::SparseMatrix<double>(dEc.transpose()) +
-    //     2 * Ql * (error[1] - l.coeffRef(0, 0)) *
-    //         Eigen::SparseMatrix<double>(dEl.transpose());
-
+      Qn = 2 * grad_x * Eigen::SparseMatrix<double>(grad_x.transpose()) +
+           2 * grad_y * Eigen::SparseMatrix<double>(grad_y.transpose());
+      qn = -2 * r_x * grad_x - 2 * r_y * grad_y;
+    } else {
+      Eigen::SparseMatrix<double> X(state_dim_, 1);
+      for (int j = 0; j < state_dim_; j++) {
+        X.coeffRef(j, 0) = stage[i].state[j];
+      }
+      
+      std::vector<double> error(2, 0.0);
+      Eigen::SparseMatrix<double> dEc(1, state_dim_);
+      Eigen::SparseMatrix<double> dEl(1, state_dim_);
+      GetErrorInfo(referenceline, stage[i], error, dEc, dEl);
+      double gain = 1.0;
+      if (i == horizon - 1) {
+        gain = 1.0;
+      }
+      Qn = 2 * Eigen::SparseMatrix<double>(dEc.transpose()) * gain * Qc * dEc +
+           2 * Eigen::SparseMatrix<double>(dEl.transpose()) * gain * Ql * dEl;
+      Eigen::SparseMatrix<double> c = dEc * X;
+      Eigen::SparseMatrix<double> l = dEl * X;
+      qn = 2 * gain * Qc * (error[0] - c.coeffRef(0, 0)) *
+               Eigen::SparseMatrix<double>(dEc.transpose()) +
+           2 * gain * Ql * (error[1] - l.coeffRef(0, 0)) *
+               Eigen::SparseMatrix<double>(dEl.transpose());
+    }
     sp::colMajor::setBlock(Q, Qn, state_dim_ * i, state_dim_ * i);
     sp::colMajor::setBlock(q, qn, state_dim_ * i, 0);
   }
-  Q += identity;
 
   Eigen::SparseMatrix<double> progress(control_dim_ * horizon, 1);
   for (int i = 0; i < horizon; i++) {
     progress.coeffRef(control_dim_ * i + control_dim_ - 1, 0) = gamma;
   }
-
-  H = 2 * BBT * Q * BB;
-  // f = 2 * BBT * Q * AA * state + BBT * q;
-  f = 2 * BBT * Q * AA * state + BBT * q - progress;
+  H = BBT * Q * BB;
+  f = BBT * Q * AA * state + BBT * q - progress;
 }
 
 void Mpcc::GetRefPoint(const Resample& referenceline, const double s,
@@ -242,41 +213,36 @@ void Mpcc::GetErrorInfo(const Resample& referenceline, const Stage& stage,
   // X_ref Y_ref dX_ref/dtheta dY_ref/dtheta theta
   std::vector<double> track_point(6, 0.0);
   GetRefPoint(referenceline, stage.state.back(), track_point);
-  // std::cout<<X<<","<<Y<<std::endl;
-  // for(int i=0;i<track_point.size();i++){
-  //   std::cout<<track_point[i]<<",";
-  // }
-  // std::cout<<std::endl;
 
   // contouring  error
-  double contouring_error = -std::sin(track_point[4]) * (track_point[0] - X) +
-                            std::cos(track_point[4]) * (track_point[1] - Y);
+  double contouring_error = -std::sin(track_point[4]) * (X - track_point[0]) +
+                            std::cos(track_point[4]) * (Y - track_point[1]);
   // lag error
-  double lag_error = std::cos(track_point[4]) * (track_point[0] - X) +
-                     std::sin(track_point[4]) * (track_point[1] - Y);
+  double lag_error = std::cos(track_point[4]) * (X - track_point[0]) +
+                     std::sin(track_point[4]) * (Y - track_point[1]);
 
   error[0] = contouring_error;
   error[1] = lag_error;
   // partial derivatives of the lag and contouring error with respect to s
   double contouring_error__theta =
-      track_point[5] * std::cos(track_point[4]) * (X - track_point[0]) +
-      track_point[5] * std::sin(track_point[4]) * (Y - track_point[1]) -
-      track_point[2] * std::sin(track_point[4]) +
+      -track_point[5] * std::cos(track_point[4]) * (X - track_point[0]) -
+      track_point[5] * std::sin(track_point[4]) * (Y - track_point[1]) +
+      track_point[2] * std::sin(track_point[4]) -
       track_point[3] * std::cos(track_point[4]);
   // std::cout<<"contouring_error__theta:"<<std::sin(track_point[4])<<","<<std::cos(track_point[4])<<std::endl;
   double lag_error__theta =
-      track_point[5] * std::sin(track_point[4]) * (X - track_point[0]) -
-      track_point[5] * std::cos(track_point[4]) * (Y - track_point[1]) +
-      track_point[2] * std::cos(track_point[4]) +
+      -track_point[5] * std::sin(track_point[4]) * (X - track_point[0]) +
+      track_point[5] * std::cos(track_point[4]) * (Y - track_point[1]) -
+      track_point[2] * std::cos(track_point[4]) -
       track_point[3] * std::sin(track_point[4]);
 
   // compute all remaining partial derivatives and store the in dError
-  dEc.coeffRef(0, 0) = std::sin(track_point[4]);
-  dEc.coeffRef(0, 2) = -std::cos(track_point[4]);
+  dEc.coeffRef(0, 0) = -std::sin(track_point[4]);
+  dEc.coeffRef(0, 2) = std::cos(track_point[4]);
   dEc.coeffRef(0, state_dim_ - 1) = contouring_error__theta;
 
-  dEl.coeffRef(0, 0) = -std::cos(track_point[4]);
-  dEl.coeffRef(0, 2) = -std::sin(track_point[4]);
+  dEl.coeffRef(0, 0) = std::cos(track_point[4]);
+  dEl.coeffRef(0, 2) = std::sin(track_point[4]);
   dEl.coeffRef(0, state_dim_ - 1) = lag_error__theta;
 }
 
@@ -335,8 +301,6 @@ void Mpcc::SolveQp(const Resample& referenceline, const Map& map) {
         stage[i].state[j] = state_horizon.coeffRef(j, 0);
       }
     }
-    // std::cout<<"control:"<<inputPredict.col(0)<<std::endl;
-    // std::cout<<"state:"<<state<<std::endl;
   } else {
     std::cout << "no solution" << std::endl;
   }
