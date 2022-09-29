@@ -103,9 +103,10 @@ void Mpcc::RecedeOneHorizon(const Resample& referenceline) {
 }
 
 void Mpcc::CalculateCost(const Resample& referenceline) {
-  double Qc = 20.0;
-  double Ql = 50.0;
-  double gamma = 0.1;
+  double Qc = 5.0;
+  double Ql = 100.0;
+  double gamma = 0.05;
+  // double gamma = 0.001;
   Eigen::SparseMatrix<double> Qn;
   Eigen::SparseMatrix<double> qn;
   for (int i = 0; i < horizon; i++) {
@@ -146,7 +147,7 @@ void Mpcc::CalculateCost(const Resample& referenceline) {
       GetErrorInfo(referenceline, stage[i], error, dEc, dEl);
       double gain = 1.0;
       if (i == horizon - 1) {
-        gain = 1.0;
+        gain = 10.0;
       }
       Qn = 2 * Eigen::SparseMatrix<double>(dEc.transpose()) * gain * Qc * dEc +
            2 * Eigen::SparseMatrix<double>(dEl.transpose()) * gain * Ql * dEl;

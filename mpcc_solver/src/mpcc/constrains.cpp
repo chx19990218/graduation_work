@@ -16,8 +16,8 @@ void Mpcc::SetConstrains(const Resample& referenceline, const Map& map) {
   int stage_index;
   for (int i = 0; i < horizon; i++) {
     auto pos = referenceline.spline.getPostion(optimal_theta[i]);
-    double x = pos[0];
-    double y = pos[1];
+    double x = stage[i].state[0];
+    double y = stage[i].state[2];
     stage_index = GetStage(map, x, y);
     if (stage_index >= 0) {
       vec_outer = std::vector<double>{
@@ -54,7 +54,7 @@ void Mpcc::SetConstrains(const Resample& referenceline, const Map& map) {
   // 加速度/角度,里程速度限制限制
   double max_attitude = 45.0 * PI / 180.0;
   double max_a = std::tan(max_attitude);
-  double max_v = 10.0;
+  double max_v = 3.0;
   for (int i = 0; i < horizon; i++) {
     // x控制量上限
     Eigen::SparseMatrix<double> Ck1(1, horizon * control_dim_);
