@@ -8,9 +8,9 @@
 
 void Mpcc::SetConstrains(const Resample& referenceline, const Map& map) {
   // 走廊边界限制
-  Cx.resize(2 * horizon, state_dim_ * horizon);
-  xup.resize(2 * horizon, 1);
-  xlow.resize(2 * horizon, 1);
+  Cx.resize(4 * horizon, state_dim_ * horizon);
+  xup.resize(4 * horizon, 1);
+  xlow.resize(4 * horizon, 1);
   std::vector<double> vec_outer, vec_inner, vec_outer_vertical,
       vec_inner_vertical;
   int stage_index;
@@ -19,30 +19,58 @@ void Mpcc::SetConstrains(const Resample& referenceline, const Map& map) {
     double x = stage[i].state[0];
     double y = stage[i].state[2];
     stage_index = GetStage(map, x, y);
+    std::cout<<stage_index;
     if (stage_index >= 0) {
-      vec_outer = std::vector<double>{
-          map.outer_point_x_[stage_index + 1] - map.outer_point_x_[stage_index],
-          map.outer_point_y_[stage_index + 1] -
-              map.outer_point_y_[stage_index]};
-      vec_inner = std::vector<double>{
-          map.inner_point_x_[stage_index] - map.inner_point_x_[stage_index + 1],
-          map.inner_point_y_[stage_index] -
-              map.inner_point_y_[stage_index + 1]};
-      vec_outer_vertical = std::vector<double>{-vec_outer[1], vec_outer[0]};
-      vec_inner_vertical = std::vector<double>{-vec_inner[1], vec_inner[0]};
+      double max_x, min_x, max_y, min_y;
+      max_x =
+          std::max({map.outer_point_x_[stage_index], map.inner_point_x_[stage_index],
+               map.outer_point_x_[stage_index + 1],
+               map.inner_point_x_[stage_index + 1]});
+      min_x =
+          std::min({map.outer_point_x_[stage_index], map.inner_point_x_[stage_index],
+               map.outer_point_x_[stage_index + 1],
+               map.inner_point_x_[stage_index + 1]});
+      max_y =
+          std::max({map.outer_point_y_[stage_index], map.inner_point_y_[stage_index],
+               map.outer_point_y_[stage_index + 1],
+               map.inner_point_y_[stage_index + 1]});
+      min_y =
+          std::min({map.outer_point_y_[stage_index], map.inner_point_y_[stage_index],
+               map.outer_point_y_[stage_index + 1],
+               map.inner_point_y_[stage_index + 1]});
+      Cx.coeffRef(4 * i + 0, 0 + i * state_dim_) = 1.0;
+      Cx.coeffRef(4 * i + 1, 0 + i * state_dim_) = -1.0;
+      Cx.coeffRef(4 * i + 2, 2 + i * state_dim_) = 1.0;
+      Cx.coeffRef(4 * i + 3, 2 + i * state_dim_) = -1.0;
+      xup.coeffRef(4 * i + 0, 0) = max_x;
+      xup.coeffRef(4 * i + 1, 0) = -min_x;
+      xup.coeffRef(4 * i + 2, 0) = max_y;
+      xup.coeffRef(4 * i + 3, 0) = -min_y;
+      // vec_outer = std::vector<double>{
+      //     map.outer_point_x_[stage_index + 1] -
+      //     map.outer_point_x_[stage_index], map.outer_point_y_[stage_index +
+      //     1] -
+      //         map.outer_point_y_[stage_index]};
+      // vec_inner = std::vector<double>{
+      //     map.inner_point_x_[stage_index] - map.inner_point_x_[stage_index +
+      //     1], map.inner_point_y_[stage_index] -
+      //         map.inner_point_y_[stage_index + 1]};
+      // vec_outer_vertical = std::vector<double>{-vec_outer[1], vec_outer[0]};
+      // vec_inner_vertical = std::vector<double>{-vec_inner[1], vec_inner[0]};
 
-      Cx.coeffRef(2 * i, 0 + i * state_dim_) = vec_outer_vertical[0];
-      Cx.coeffRef(2 * i, 2 + i * state_dim_) = vec_outer_vertical[1];
-      xup.coeffRef(2 * i, 0) =
-          map.outer_point_x_[stage_index] * vec_outer_vertical[0] +
-          map.outer_point_y_[stage_index] * vec_outer_vertical[1];
-      Cx.coeffRef(2 * i + 1, 0 + i * state_dim_) = vec_inner_vertical[0];
-      Cx.coeffRef(2 * i + 1, 2 + i * state_dim_) = vec_inner_vertical[1];
-      xup.coeffRef(2 * i + 1, 0) =
-          map.inner_point_x_[stage_index+1] * vec_inner_vertical[0] +
-          map.inner_point_y_[stage_index+1] * vec_inner_vertical[1];
+      // Cx.coeffRef(2 * i, 0 + i * state_dim_) = vec_outer_vertical[0];
+      // Cx.coeffRef(2 * i, 2 + i * state_dim_) = vec_outer_vertical[1];
+      // xup.coeffRef(2 * i, 0) =
+      //     map.outer_point_x_[stage_index] * vec_outer_vertical[0] +
+      //     map.outer_point_y_[stage_index] * vec_outer_vertical[1];
+      // Cx.coeffRef(2 * i + 1, 0 + i * state_dim_) = vec_inner_vertical[0];
+      // Cx.coeffRef(2 * i + 1, 2 + i * state_dim_) = vec_inner_vertical[1];
+      // xup.coeffRef(2 * i + 1, 0) =
+      //     map.inner_point_x_[stage_index+1] * vec_inner_vertical[0] +
+      //     map.inner_point_y_[stage_index+1] * vec_inner_vertical[1];
     }
   }
+  std::cout<<std::endl;
   // std::cout<<vec_outer_vertical[0]<<","<<vec_outer_vertical[1]<<","<<vec_inner_vertical[0]<<","<<vec_inner_vertical[1]<<std::endl;
 
   // 速度限制
@@ -53,7 +81,7 @@ void Mpcc::SetConstrains(const Resample& referenceline, const Map& map) {
 
   // 加速度/角度,里程速度限制限制
   double max_attitude = 45.0 * PI / 180.0;
-  double max_a = std::tan(max_attitude);
+  double max_a = 9.8 * std::tan(max_attitude);
   double max_v = 3.0;
   for (int i = 0; i < horizon; i++) {
     // x控制量上限

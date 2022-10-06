@@ -33,7 +33,7 @@ int main(int argc, char** argv)
   resample.FitResample(smooth);
   
   
-  int cnt = 200;
+  int cnt = 500;
   mpcc.Init(resample);
   for (int i = 0; i < cnt; i++) { 
     if (i % 10 == 0){
