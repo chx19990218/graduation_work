@@ -6,7 +6,6 @@
 #include <eigen3/Eigen/Dense>
 #include <eigen3/Eigen/Sparse>
 
-#include "mpcc.h"
 #include "osqp_interface.h"
 #include "resample.h"
 #include "sparse_utils.h"

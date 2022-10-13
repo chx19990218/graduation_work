@@ -13,6 +13,7 @@
 #include "resample.h"
 #include "search.h"
 #include "smooth.h"
+#include "obstacle.h"
 
 namespace plt = matplotlibcpp;
 
@@ -53,5 +54,5 @@ class Plot {
       {Blue, "b"},    {Green, "g"},  {Red, "r"},   {Cyan, "c"},
       {Magenta, "m"}, {Yellow, "y"}, {Black, "k"}, {White, "w"}};
   void plot(const Map& map, const Search& search, const Smooth& smooth,
-            const Resample& resample, const Mpcc& mpcc);
+            const Resample& resample, const Mpcc& mpcc, const Obstacle& obstacle);
 };

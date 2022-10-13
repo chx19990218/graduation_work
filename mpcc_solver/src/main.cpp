@@ -9,7 +9,6 @@
 #include "plot.h"
 
 
-namespace plt = matplotlibcpp;
 int main(int argc, char** argv)
 {
   ros::init(argc, argv, "mpcc_node");
@@ -26,14 +25,16 @@ int main(int argc, char** argv)
   Smooth smooth;
   Resample resample;
   Mpcc mpcc;
+  Obstacle obstacle;
   Plot plot;
   map.GenerateMap();
   search.SphereSearch(map);
   smooth.Fem(search);
   resample.FitResample(smooth);
+  obstacle.Update(resample, map, mpcc);
   
   
-  int cnt = 500;
+  int cnt = 1;
   mpcc.Init(resample);
   for (int i = 0; i < cnt; i++) { 
     if (i % 10 == 0){
@@ -53,7 +54,7 @@ int main(int argc, char** argv)
     mpcc.y_horizon.emplace_back(mpcc.statePredict.coeffRef(2, i));
   }
 
-  plot.plot(map, search, smooth, resample, mpcc);
+  plot.plot(map, search, smooth, resample, mpcc, obstacle);
 
 
 

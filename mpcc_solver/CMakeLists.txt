@@ -28,6 +28,7 @@ include_directories(
   src/matplotlib-cpp
   src/utils
   src/plot
+  src/obstacle
   /usr/local/include/osqp
 )
 add_executable(mpcc_node 
@@ -39,6 +40,7 @@ add_executable(mpcc_node
   src/plot/plot.cpp
   src/mpcc/constrains.cpp
   src/mpcc/osqp_interface.cpp
+  src/obstacle/obstacle.cpp
   src/referenceline/search.cpp
   src/referenceline/smooth.cpp
   src/referenceline/resample.cpp

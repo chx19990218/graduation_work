@@ -19,7 +19,7 @@ void Mpcc::SetConstrains(const Resample& referenceline, const Map& map) {
     double x = stage[i].state[0];
     double y = stage[i].state[2];
     stage_index = GetStage(map, x, y);
-    std::cout<<stage_index;
+    // std::cout<<stage_index;
     if (stage_index >= 0) {
       double max_x, min_x, max_y, min_y;
       max_x =
@@ -70,7 +70,7 @@ void Mpcc::SetConstrains(const Resample& referenceline, const Map& map) {
       //     map.inner_point_y_[stage_index+1] * vec_inner_vertical[1];
     }
   }
-  std::cout<<std::endl;
+  // std::cout<<std::endl;
   // std::cout<<vec_outer_vertical[0]<<","<<vec_outer_vertical[1]<<","<<vec_inner_vertical[0]<<","<<vec_inner_vertical[1]<<std::endl;
 
   // 速度限制

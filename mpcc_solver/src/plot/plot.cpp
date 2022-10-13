@@ -4,7 +4,7 @@
 #include "plot.h"
 
 void Plot::plot(const Map& map, const Search& search, const Smooth& smooth,
-                const Resample& resample, const Mpcc& mpcc) {
+                const Resample& resample, const Mpcc& mpcc, const Obstacle& obstacle) {
   plt::figure(1);
 
   // 中心线
@@ -63,6 +63,13 @@ void Plot::plot(const Map& map, const Search& search, const Smooth& smooth,
   // state and theta
   Option option9(color_map[Red], line_map[Seven]);
   plt::plot(mpcc.theta_x_, mpcc.theta_y_, option9.color_ + option9.line_);
+
+  // obstacle
+  Option option10(color_map[Cyan], line_map[Seven]);
+  for (int i = 0; i < obstacle.grid_x_.size(); i++) {
+    plt::plot(obstacle.grid_x_[i], obstacle.grid_y_[i], option10.color_ + option10.line_);
+  }
+  
 
   // std::vector<double> x, y;
   // for(int i=0;i<mpcc.horizon;i++){

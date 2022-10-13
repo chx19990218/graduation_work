@@ -56,7 +56,7 @@ void Mpcc::Init(const Resample& referenceline) {
   max_theta_ = referenceline.spline.getLength();
 
   state.coeffRef(0, 0) = 0.5;
-  state.coeffRef(2, 0) = 3.0;
+  state.coeffRef(2, 0) = 1.5;
   UpdateState(referenceline);
 
   optimal_theta.clear();
@@ -105,7 +105,7 @@ void Mpcc::RecedeOneHorizon(const Resample& referenceline) {
 void Mpcc::CalculateCost(const Resample& referenceline) {
   double Qc = 2.0;
   double Ql = 1.0;
-  double gamma = 1.0;
+  double gamma = 3.0;
   // double gamma = 0.001;
   Eigen::SparseMatrix<double> Qn;
   Eigen::SparseMatrix<double> qn;
