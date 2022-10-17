@@ -65,9 +65,19 @@ void Plot::plot(const Map& map, const Search& search, const Smooth& smooth,
   plt::plot(mpcc.theta_x_, mpcc.theta_y_, option9.color_ + option9.line_);
 
   // obstacle
+  std::vector<double> x1, y1;
+  for (int i = 0; i < obstacle.obstacle_pos_.size(); i++) {
+    x1.emplace_back(obstacle.obstacle_pos_[i][0]);
+    y1.emplace_back(obstacle.obstacle_pos_[i][1]);
+  }
+  plt::fill(x1, y1, {});
+
   Option option10(color_map[Cyan], line_map[Seven]);
+  plt::plot(obstacle.optimal_path_x, obstacle.optimal_path_y, option10.color_ + option10.line_);
+
+  Option option11(color_map[Green], line_map[Six]);
   for (int i = 0; i < obstacle.grid_x_.size(); i++) {
-    plt::plot(obstacle.grid_x_[i], obstacle.grid_y_[i], option10.color_ + option10.line_);
+    plt::plot(obstacle.grid_x_[i], obstacle.grid_y_[i], option11.color_ + option11.line_);
   }
   
 

@@ -93,6 +93,7 @@ void Obstacle::DPForward(Mpcc& mpcc, const Resample& referenceline) {
               GetLengthCost(mpcc, layer, now_index, next_index);
           double angle_cost =
               GetAngleCost(mpcc, layer, prev_index, now_index, next_index);
+          // std::cout<<similarity_cost<<","<<length_cost<<","<<angle_cost<<std::endl;
           double total_cost;
           if (layer == row_size - 2) {
             total_cost = similarity_weight * similarity_cost +
@@ -120,6 +121,9 @@ void Obstacle::DPForward(Mpcc& mpcc, const Resample& referenceline) {
         if (get_valid_next_flag) {
           optimal_cost[layer + 1][now_index][prev_index] = min_cost;
           optimal_index[layer + 1][now_index][prev_index] = min_cost_next_index;
+          // std::cout << layer + 1 << "," << now_index << "," << prev_index <<
+          // ","
+          //           << min_cost_next_index << std::endl;
           get_valid_path_flag = true;
         }
       }
@@ -168,14 +172,21 @@ void Obstacle::DPForward(Mpcc& mpcc, const Resample& referenceline) {
 }
 
 void Obstacle::DPBackward() {
+  optimal_path.clear();
+  optimal_path.resize(row_size);
   optimal_path.emplace_back(optimal_index[0][0][0]);
+  optimal_path_x.emplace_back(grid_x_[0][optimal_path[0]]);
+  optimal_path_y.emplace_back(grid_y_[0][optimal_path[0]]);
   optimal_path.emplace_back(optimal_index[1][optimal_path[0]][0]);
-  for (int i = 2; i < col_size; i++) {
-    optimal_path.emplace_back(
-        optimal_index[i - 1][optimal_path[i - 1]][optimal_path[i - 2]]);
-  }
-  for (int i = 2; i < col_size; i++) {
-    std::cout << optimal_path[i] << std::endl;
+  optimal_path_x.emplace_back(grid_x_[1][optimal_path[1]]);
+  optimal_path_y.emplace_back(grid_y_[1][optimal_path[1]]);
+  optimal_path_x.clear();
+  optimal_path_y.clear();
+  for (int i = 2; i < row_size; i++) {
+    optimal_path[i] =
+        optimal_index[i][optimal_path[i - 1]][optimal_path[i - 2]];
+    optimal_path_x.emplace_back(grid_x_[i][optimal_path[i]]);
+    optimal_path_y.emplace_back(grid_y_[i][optimal_path[i]]);
   }
 }
 
@@ -224,14 +235,14 @@ double Obstacle::GetLengthCost(Mpcc& mpcc, int layer, int now_index,
 double Obstacle::GetAngleCost(Mpcc& mpcc, int layer, int prev_index,
                               int now_index, int next_index) {
   double x1, y1, x2, y2, x3, y3;
-  x2 = grid_x_[layer][now_index];
-  y2 = grid_y_[layer][now_index];
   x3 = grid_x_[layer + 1][next_index];
   y3 = grid_y_[layer + 1][next_index];
   double dx1, dy1, dx2, dy2;
   if (layer == -1) {
     dx1 = mpcc.state.coeffRef(1, 0);
     dy1 = mpcc.state.coeffRef(3, 0);
+    dx2 = x3 - mpcc.state.coeffRef(0, 0);
+    dy2 = y3 - mpcc.state.coeffRef(2, 0);
   } else {
     if (layer == 0) {
       x1 = mpcc.state.coeffRef(0, 0);
@@ -240,11 +251,14 @@ double Obstacle::GetAngleCost(Mpcc& mpcc, int layer, int prev_index,
       x1 = grid_x_[layer - 1][prev_index];
       y1 = grid_y_[layer - 1][prev_index];
     }
+    x2 = grid_x_[layer][now_index];
+    y2 = grid_y_[layer][now_index];
     dx1 = x2 - x1;
     dy1 = y2 - y1;
+    dx2 = x3 - x2;
+    dy2 = y3 - y2;
   }
-  dx2 = x3 - x2;
-  dy2 = y3 - y2;
+
   double numer = dx1 * dx2 + dy1 * dy2;
   double denom = std::sqrt((dx1 * dx1 + dy1 * dy1) * (dx2 * dx2 + dy2 * dy2));
   double ratio = numer / denom;
