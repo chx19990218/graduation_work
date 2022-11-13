@@ -7,7 +7,8 @@ void Obstacle::Update(const Resample& referenceline, const Map& map,
                       Mpcc& mpcc) {
   GenerateGridCoordinate(referenceline, map, mpcc);
   DPForward(mpcc, referenceline);
-  DPBackward();
+  DPBackward(mpcc);
+  ExpandPath(mpcc);
 }
 
 void Obstacle::GenerateGridCoordinate(const Resample& referenceline,
@@ -171,24 +172,66 @@ void Obstacle::DPForward(Mpcc& mpcc, const Resample& referenceline) {
   optimal_index[0][0][0] = min_cost_next_index;
 }
 
-void Obstacle::DPBackward() {
+void Obstacle::DPBackward(Mpcc& mpcc) {
+  std::vector<double> optimal_path_x;
+  std::vector<double> optimal_path_y;
+  
+  
   optimal_path.clear();
-  optimal_path.resize(row_size);
-  optimal_path.emplace_back(optimal_index[0][0][0]);
-  optimal_path_x.emplace_back(grid_x_[0][optimal_path[0]]);
-  optimal_path_y.emplace_back(grid_y_[0][optimal_path[0]]);
-  optimal_path.emplace_back(optimal_index[1][optimal_path[0]][0]);
-  optimal_path_x.emplace_back(grid_x_[1][optimal_path[1]]);
-  optimal_path_y.emplace_back(grid_y_[1][optimal_path[1]]);
   optimal_path_x.clear();
   optimal_path_y.clear();
+  optimal_path.resize(row_size);
+  optimal_path[0] = optimal_index[0][0][0];
+  optimal_path_x.emplace_back(grid_x_[0][optimal_path[0]]);
+  optimal_path_y.emplace_back(grid_y_[0][optimal_path[0]]);
+  optimal_path[1] = optimal_index[1][optimal_path[0]][0];
+  optimal_path_x.emplace_back(grid_x_[1][optimal_path[1]]);
+  optimal_path_y.emplace_back(grid_y_[1][optimal_path[1]]);
+  
   for (int i = 2; i < row_size; i++) {
     optimal_path[i] =
         optimal_index[i][optimal_path[i - 1]][optimal_path[i - 2]];
     optimal_path_x.emplace_back(grid_x_[i][optimal_path[i]]);
     optimal_path_y.emplace_back(grid_y_[i][optimal_path[i]]);
   }
+  mpcc.optimal_path_x = optimal_path_x;
+  mpcc.optimal_path_y = optimal_path_y;
 }
+
+void Obstacle::ExpandPath(Mpcc& mpcc) {
+  std::vector<double> left_border_x;
+  std::vector<double> left_border_y;
+  std::vector<double> right_border_x;
+  std::vector<double> right_border_y;
+  for (int i = 0; i < optimal_path.size(); i++) {
+    int left = optimal_path[i];
+    int right = optimal_path[i];
+    // 向左
+    for (int j = optimal_path[i] - 1; j >= 0; j--) {
+      if (occupied_flag_[i][j]) {
+        break;
+      }
+      left = j;
+    }
+    left_border_x.emplace_back(grid_x_[i][left]);
+    left_border_y.emplace_back(grid_y_[i][left]);
+    // 向右
+    for (int j = optimal_path[i] + 1; j < col_size; j++) {
+      if (occupied_flag_[i][j]) {
+        break;
+      }
+      right = j;
+    }
+    right_border_x.emplace_back(grid_x_[i][right]);
+    right_border_y.emplace_back(grid_y_[i][right]);
+  }
+  mpcc.left_border_x = left_border_x;
+  mpcc.left_border_y = left_border_y;
+  mpcc.right_border_x = right_border_x;
+  mpcc.right_border_y = right_border_y;
+}
+
+
 
 bool Obstacle::PathIsObstructed(int layer, int now_index, int next_index) {
   if (now_index < next_index) {

@@ -254,18 +254,6 @@ void Mpcc::SolveQp(const Resample& referenceline, const Map& map) {
   SetConstrains(referenceline, map);
   CalculateCost(referenceline);
 
-  // C.resize(control_dim_ * horizon, control_dim_ * horizon);
-  // cupp.resize(control_dim_ * horizon, 1);
-  // clow.resize(cupp.rows(), 1);
-  // for (int i = 0; i < control_dim_ * horizon; i++) {
-  //   cupp.coeffRef(i, 0) = 100.0;
-  //   clow.coeffRef(i, 0) = -100.0;
-  //   C.coeffRef(i, i) = 1.0;
-  // }
-  clow.resize(cupp.rows(), 1);
-  for (int i = 0; i < cupp.rows(); i++) {
-    clow.coeffRef(i, 0) = -100.0;
-  }
 
   osqpInterface.updateMatrices(H, f, A, b, C, clow, cupp, ul, uu);
   osqpInterface.solveQP();

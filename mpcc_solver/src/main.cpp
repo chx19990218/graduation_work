@@ -31,10 +31,15 @@ int main(int argc, char** argv)
   search.SphereSearch(map);
   smooth.Fem(search);
   resample.FitResample(smooth);
+
+  mpcc.state.coeffRef(0, 0) = 0.5;
+  mpcc.state.coeffRef(1, 0) = 0.0;
+  mpcc.state.coeffRef(2, 0) = 1.8;
+  mpcc.state.coeffRef(3, 0) = 1.0;
   obstacle.Update(resample, map, mpcc);
   
   
-  int cnt = 1;
+  int cnt = 100;
   mpcc.Init(resample);
   for (int i = 0; i < cnt; i++) { 
     if (i % 10 == 0){

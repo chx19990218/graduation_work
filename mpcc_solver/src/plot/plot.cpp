@@ -72,13 +72,20 @@ void Plot::plot(const Map& map, const Search& search, const Smooth& smooth,
   }
   plt::fill(x1, y1, {});
 
-  Option option10(color_map[Cyan], line_map[Seven]);
-  plt::plot(obstacle.optimal_path_x, obstacle.optimal_path_y, option10.color_ + option10.line_);
+  // // 动态规划最优轨迹
+  // Option option10(color_map[Cyan], line_map[Ten]);
+  // plt::plot(mpcc.optimal_path_x, mpcc.optimal_path_y, option10.color_ + option10.line_);
 
+  // 撒点
   Option option11(color_map[Green], line_map[Six]);
   for (int i = 0; i < obstacle.grid_x_.size(); i++) {
     plt::plot(obstacle.grid_x_[i], obstacle.grid_y_[i], option11.color_ + option11.line_);
   }
+
+  // 扩张边界
+  Option option12(color_map[Magenta], line_map[Three]);
+  plt::plot(mpcc.left_border_x, mpcc.left_border_y, option12.color_ + option12.line_);
+  plt::plot(mpcc.right_border_x, mpcc.right_border_y, option12.color_ + option12.line_);
   
 
   // std::vector<double> x, y;

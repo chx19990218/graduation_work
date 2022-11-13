@@ -32,8 +32,7 @@ class Obstacle {
       std::vector<std::vector<std::vector<int>>>(
           row_size, std::vector<std::vector<int>>(
                         col_size, std::vector<int>(col_size, 0)));
-  std::vector<double> optimal_path_x;
-  std::vector<double> optimal_path_y;
+  
   void GenerateGridCoordinate(const Resample& referenceline, const Map& map,
                               Mpcc& mpcc);
   std::vector<double> GetIntersectionPoint(Eigen::Vector2d pos,
@@ -47,7 +46,9 @@ class Obstacle {
                       int next_index);
   bool PathIsObstructed(int layer, int now_index, int next_index);
   void DPForward(Mpcc& mpcc, const Resample& referenceline);
-  void DPBackward();
+  void DPBackward(Mpcc& mpcc);
+  void ExpandPath(Mpcc& mpcc);
+  
   void Update(const Resample& referenceline, const Map& map,
                       Mpcc& mpcc);
 };

@@ -3,135 +3,164 @@
 
 #include "map.h"
 #include "mpcc.h"
+#include "obstacle.h"
 
 // TODO ：维度逐渐增加
 
 void Mpcc::SetConstrains(const Resample& referenceline, const Map& map) {
   // 走廊边界限制
-  Cx.resize(4 * horizon, state_dim_ * horizon);
-  xup.resize(4 * horizon, 1);
-  xlow.resize(4 * horizon, 1);
-  std::vector<double> vec_outer, vec_inner, vec_outer_vertical,
-      vec_inner_vertical;
-  int stage_index;
+  Cx.resize(horizon, state_dim_ * horizon);
+  xup.resize(horizon, 1);
+  xlow.resize(horizon, 1);
+
   for (int i = 0; i < horizon; i++) {
-    auto pos = referenceline.spline.getPostion(optimal_theta[i]);
     double x = stage[i].state[0];
     double y = stage[i].state[2];
-    stage_index = GetStage(map, x, y);
-    // std::cout<<stage_index;
-    if (stage_index >= 0) {
-      double max_x, min_x, max_y, min_y;
-      max_x =
-          std::max({map.outer_point_x_[stage_index], map.inner_point_x_[stage_index],
-               map.outer_point_x_[stage_index + 1],
-               map.inner_point_x_[stage_index + 1]});
-      min_x =
-          std::min({map.outer_point_x_[stage_index], map.inner_point_x_[stage_index],
-               map.outer_point_x_[stage_index + 1],
-               map.inner_point_x_[stage_index + 1]});
-      max_y =
-          std::max({map.outer_point_y_[stage_index], map.inner_point_y_[stage_index],
-               map.outer_point_y_[stage_index + 1],
-               map.inner_point_y_[stage_index + 1]});
-      min_y =
-          std::min({map.outer_point_y_[stage_index], map.inner_point_y_[stage_index],
-               map.outer_point_y_[stage_index + 1],
-               map.inner_point_y_[stage_index + 1]});
-      Cx.coeffRef(4 * i + 0, 0 + i * state_dim_) = 1.0;
-      Cx.coeffRef(4 * i + 1, 0 + i * state_dim_) = -1.0;
-      Cx.coeffRef(4 * i + 2, 2 + i * state_dim_) = 1.0;
-      Cx.coeffRef(4 * i + 3, 2 + i * state_dim_) = -1.0;
-      xup.coeffRef(4 * i + 0, 0) = max_x;
-      xup.coeffRef(4 * i + 1, 0) = -min_x;
-      xup.coeffRef(4 * i + 2, 0) = max_y;
-      xup.coeffRef(4 * i + 3, 0) = -min_y;
-      // vec_outer = std::vector<double>{
-      //     map.outer_point_x_[stage_index + 1] -
-      //     map.outer_point_x_[stage_index], map.outer_point_y_[stage_index +
-      //     1] -
-      //         map.outer_point_y_[stage_index]};
-      // vec_inner = std::vector<double>{
-      //     map.inner_point_x_[stage_index] - map.inner_point_x_[stage_index +
-      //     1], map.inner_point_y_[stage_index] -
-      //         map.inner_point_y_[stage_index + 1]};
-      // vec_outer_vertical = std::vector<double>{-vec_outer[1], vec_outer[0]};
-      // vec_inner_vertical = std::vector<double>{-vec_inner[1], vec_inner[0]};
+    std::vector<double> border = GetPointBorderConstrain(map, x, y);
+    // std::cout << border[0] << "," << border[1] << "," << border[2] << "," << border[3] << std::endl;
+    
+    double numer = -(border[0] - border[2]);
+    double denom = (border[1] - border[3]);
+    double dbmax = std::max(numer * border[0] - denom * border[1], numer * border[2] - denom * border[3]);
+    double dbmin = std::min(numer * border[0] - denom * border[1], numer * border[2] - denom * border[3]);
 
-      // Cx.coeffRef(2 * i, 0 + i * state_dim_) = vec_outer_vertical[0];
-      // Cx.coeffRef(2 * i, 2 + i * state_dim_) = vec_outer_vertical[1];
-      // xup.coeffRef(2 * i, 0) =
-      //     map.outer_point_x_[stage_index] * vec_outer_vertical[0] +
-      //     map.outer_point_y_[stage_index] * vec_outer_vertical[1];
-      // Cx.coeffRef(2 * i + 1, 0 + i * state_dim_) = vec_inner_vertical[0];
-      // Cx.coeffRef(2 * i + 1, 2 + i * state_dim_) = vec_inner_vertical[1];
-      // xup.coeffRef(2 * i + 1, 0) =
-      //     map.inner_point_x_[stage_index+1] * vec_inner_vertical[0] +
-      //     map.inner_point_y_[stage_index+1] * vec_inner_vertical[1];
-    }
+    Cx.coeffRef(i, i * state_dim_ + 0) = numer;
+    Cx.coeffRef(i, i * state_dim_ + 2) = -denom;
+    xup.coeffRef(i, 0) = dbmax;
+    xlow.coeffRef(i, 0) = dbmin;
   }
-  // std::cout<<std::endl;
-  // std::cout<<vec_outer_vertical[0]<<","<<vec_outer_vertical[1]<<","<<vec_inner_vertical[0]<<","<<vec_inner_vertical[1]<<std::endl;
-
+  // std::cout << std::endl;
   // 速度限制
   // TODO
 
   C = Eigen::SparseMatrix<double>(Cx * BB);
   cupp = xup - Eigen::SparseMatrix<double>(Cx * AA * state);
+  clow = xlow - Eigen::SparseMatrix<double>(Cx * AA * state);
 
   // 加速度/角度,里程速度限制限制
   double max_attitude = 45.0 * PI / 180.0;
   double max_a = 9.8 * std::tan(max_attitude);
   double max_v = 3.0;
   for (int i = 0; i < horizon; i++) {
-    // x控制量上限
+    // x轴控制量上限
     Eigen::SparseMatrix<double> Ck1(1, horizon * control_dim_);
     Eigen::SparseMatrix<double> xupk1(1, 1);
+    Eigen::SparseMatrix<double> xlowk1(1, 1);
     Ck1.coeffRef(0, i * control_dim_ + 0) = 1.0;
     xupk1.coeffRef(0, 0) = max_a;
+    xlowk1.coeffRef(0, 0) = -max_a;
     sp::colMajor::addRows(C, Ck1);
     sp::colMajor::addRows(cupp, xupk1);
+    sp::colMajor::addRows(clow, xlowk1);
 
     // y控制量上限
     Eigen::SparseMatrix<double> Ck2(1, horizon * control_dim_);
     Eigen::SparseMatrix<double> xupk2(1, 1);
+    Eigen::SparseMatrix<double> xlowk2(1, 1);
     Ck2.coeffRef(0, i * control_dim_ + 1) = 1.0;
     xupk2.coeffRef(0, 0) = max_a;
+    xlowk2.coeffRef(0, 0) = -max_a;
     sp::colMajor::addRows(C, Ck2);
     sp::colMajor::addRows(cupp, xupk2);
+    sp::colMajor::addRows(clow, xlowk2);
 
     // theta控制量上限
     Eigen::SparseMatrix<double> Ck3(1, horizon * control_dim_);
     Eigen::SparseMatrix<double> xupk3(1, 1);
+    Eigen::SparseMatrix<double> xlowk3(1, 1);
     Ck3.coeffRef(0, i * control_dim_ + control_dim_ - 1) = 1.0;
     xupk3.coeffRef(0, 0) = max_v;
+    xlowk3.coeffRef(0, 0) = 0.0;
     sp::colMajor::addRows(C, Ck3);
     sp::colMajor::addRows(cupp, xupk3);
-
-    // x控制量下限
-    Eigen::SparseMatrix<double> Ck4(1, horizon * control_dim_);
-    Eigen::SparseMatrix<double> xupk4(1, 1);
-    Ck4.coeffRef(0, i * control_dim_ + 0) = -1.0;
-    xupk4.coeffRef(0, 0) = max_a;
-    sp::colMajor::addRows(C, Ck4);
-    sp::colMajor::addRows(cupp, xupk4);
-
-    // y控制量下限
-    Eigen::SparseMatrix<double> Ck5(1, horizon * control_dim_);
-    Eigen::SparseMatrix<double> xupk5(1, 1);
-    Ck5.coeffRef(0, i * control_dim_ + 1) = -1.0;
-    xupk5.coeffRef(0, 0) = max_a;
-    sp::colMajor::addRows(C, Ck5);
-    sp::colMajor::addRows(cupp, xupk5);
-
-    // theta控制量下限
-    Eigen::SparseMatrix<double> Ck6(1, horizon * control_dim_);
-    Eigen::SparseMatrix<double> xupk6(1, 1);
-    Ck6.coeffRef(0, i * control_dim_ + control_dim_ - 1) = -1.0;
-    xupk6.coeffRef(0, 0) = 0.0;
-    sp::colMajor::addRows(C, Ck6);
-    sp::colMajor::addRows(cupp, xupk6);
+    sp::colMajor::addRows(clow, xlowk3);
   }
+}
+
+std::vector<double> Mpcc::GetPointBorderConstrain(const Map& map, double x,
+                                                  double y) {
+  int stage_index = GetStage(map, x, y);
+
+  std::vector<double> res(4);
+  if (stage_index >= 0) {
+    // 进入障碍区，后续更新进入条件
+    if (y > 2.0 && y < 4.0 && x < 1.0) {
+      
+      res = GetBorder(x, y);
+      
+    } else { // 没进入障碍区
+      double x1 = map.outer_point_x_[stage_index];
+      double y1 = map.outer_point_y_[stage_index];
+      double x2 = map.outer_point_x_[stage_index + 1];
+      double y2 = map.outer_point_y_[stage_index + 1];
+      std::vector<double> outer_vertical_point = GetVerticalPoint(x1, y1, x2, y2, x, y);
+      res[0] = outer_vertical_point[0];
+      res[1] = outer_vertical_point[1];
+      x1 = map.inner_point_x_[stage_index];
+      y1 = map.inner_point_y_[stage_index];
+      x2 = map.inner_point_x_[stage_index + 1];
+      y2 = map.inner_point_y_[stage_index + 1];
+      std::vector<double> inner_vertical_point = GetVerticalPoint(x1, y1, x2, y2, x, y);
+      res[2] = inner_vertical_point[0];
+      res[3] = inner_vertical_point[1];
+    }
+  }
+  return res;
+}
+
+// 求取点到边的垂线交点
+// point1, point2是边, point3是外点, point4是待求点
+std::vector<double> Mpcc::GetVerticalPoint(double x1, double y1, double x2,
+                                           double y2, double x3, double y3) {
+  double a11 = x1 - x2;
+  double a12 = y1 - y2;
+  double b1 = x3 * (x1 - x2) + y3 * (y1 - y2);
+  double a21 = y1 - y2;
+  double a22 = -(x1 - x2);
+  double b2 = x2 * (y1 - y2) - y2 * (x1 - x2);
+  double D = a11 * a22 - a12 * a21;
+  double D1 = b1 * a22 - b2 * a12;
+  double D2 = a11 * b2 - b1 * a21;
+
+  double x4 = D1 / D;
+  double y4 = D2 / D;
+  return std::vector<double> {x4, y4};
+}
+
+std::vector<double> Mpcc::GetBorder(double now_x, double now_y) {
+  std::vector<double> border(4, 0.0);
+  int index = 0;
+  if (now_y < optimal_path_y[0]) {
+    index = 0;
+    border[0] = left_border_x[0];
+    border[1] = left_border_y[0];
+    border[2] = right_border_x[0];
+    border[3] = right_border_y[0];
+  } else if (now_y >= optimal_path_y.back()) {
+    index = optimal_path_y.size() - 1;
+    border[0] = left_border_x.back();
+    border[1] = left_border_y.back();
+    border[2] = right_border_x.back();
+    border[3] = right_border_y.back();
+  } else {
+    for (int i = 1; i < optimal_path_y.size(); i++) {
+      index = i;
+      if (now_y >= optimal_path_y[i - 1] && now_y < optimal_path_y[i]) {
+        double rate = (now_y - optimal_path_y[i - 1]) /
+                      (optimal_path_y[i] - optimal_path_y[i - 1]);
+        border[0] = left_border_x[i - 1] +
+                    (left_border_x[i] - left_border_x[i - 1]) * rate;
+        border[1] = left_border_y[i - 1] +
+                    (left_border_y[i] - left_border_y[i - 1]) * rate;
+        border[2] = right_border_x[i - 1] +
+                    (right_border_x[i] - right_border_x[i - 1]) * rate;
+        border[3] = right_border_y[i - 1] +
+                    (right_border_y[i] - right_border_y[i - 1]) * rate;
+        break;
+      }
+    }
+  }
+  return border;
 }
 
 int Mpcc::GetStage(const Map& map, double x, double y) {

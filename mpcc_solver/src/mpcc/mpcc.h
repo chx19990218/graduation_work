@@ -19,9 +19,7 @@ struct Stage {
   std::vector<double> state;
   std::vector<double> u;
 
-  Stage(std::vector<double> state_) {
-    state = state_;
-  }
+  Stage(std::vector<double> state_) { state = state_; }
 };
 
 class Mpcc {
@@ -30,7 +28,7 @@ class Mpcc {
   int state_dim_ = 5;
   // ax ay az v_theta
   int control_dim_ = 3;
-  int horizon = 10;
+  int horizon = 20;
   bool init_status = true;
   double Ts = 0.02;
   double max_theta_;
@@ -72,6 +70,13 @@ class Mpcc {
   std::vector<double> theta_x_;
   std::vector<double> theta_y_;
 
+  std::vector<double> optimal_path_x;
+  std::vector<double> optimal_path_y;
+  std::vector<double> left_border_x;
+  std::vector<double> left_border_y;
+  std::vector<double> right_border_x;
+  std::vector<double> right_border_y;
+
   Mpcc();
   void Init(const Resample& referenceline);
   void UpdateState(const Resample& referenceline);
@@ -81,10 +86,15 @@ class Mpcc {
   int GetStage(const Map& map, double x, double y);
   bool InRec(std::vector<std::vector<double>>& rec, double x, double y);
   void SetConstrains(const Resample& referenceline, const Map& map);
+  std::vector<double> GetPointBorderConstrain(const Map& map, double x,
+                                              double y);
+  std::vector<double> GetVerticalPoint(double x1, double y1, double x2,
+                                       double y2, double x3, double y3);
   void GetRefPoint(const Resample& referenceline, const double s,
                    std::vector<double>& ref_point);
+  std::vector<double> GetBorder(double now_x, double now_y);
   void GetErrorInfo(const Resample& referenceline, const Stage& stage,
-                        std::vector<double>& error,
-                        Eigen::SparseMatrix<double>& dEc,
-                        Eigen::SparseMatrix<double>& dEl);
+                    std::vector<double>& error,
+                    Eigen::SparseMatrix<double>& dEc,
+                    Eigen::SparseMatrix<double>& dEl);
 };
