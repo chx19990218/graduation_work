@@ -103,9 +103,9 @@ void Mpcc::RecedeOneHorizon(const Resample& referenceline) {
 }
 
 void Mpcc::CalculateCost(const Resample& referenceline) {
-  double Qc = 2.0;
-  double Ql = 1.0;
-  double gamma = 3.0;
+  double Qc = 1.0;
+  double Ql = 5.0;
+  double gamma = 10.0;
   // double gamma = 0.001;
   Eigen::SparseMatrix<double> Qn;
   Eigen::SparseMatrix<double> qn;
@@ -157,6 +157,30 @@ void Mpcc::CalculateCost(const Resample& referenceline) {
                Eigen::SparseMatrix<double>(dEc.transpose()) +
            2 * gain * Ql * (error[1] - l.coeffRef(0, 0)) *
                Eigen::SparseMatrix<double>(dEl.transpose());
+    }
+    bool chance_constrain_flag = true;
+    double Sobs = 0.1;
+    double x0 = 0.5;
+    double y0 = 3.0;
+    double kesi = -0.01;
+    if (chance_constrain_flag) {
+      double denom = std::pow(stage[i].state[0] - x0, 2) + std::pow(stage[i].state[2] - y0, 2) + kesi;
+      double g11 = 2 * (-std::pow(stage[i].state[0] - x0, 2) + std::pow(stage[i].state[2] - y0, 2) + kesi) / std::pow(denom, 2);
+      double g12 = -4 * (stage[i].state[0] - x0) * (stage[i].state[2] - y0) / std::pow(denom, 2);
+      double g21 = g12;
+      double g22 = 2 * (std::pow(stage[i].state[0] - x0, 2) - std::pow(stage[i].state[2] - y0, 2) + kesi) / std::pow(denom, 2);
+      double gx = 2 * (stage[i].state[0] - x0) / denom;
+      double gy = 2 * (stage[i].state[2] - y0) / denom;
+      double p11 = gx - stage[i].state[0] * g11 - stage[i].state[2] * g21;
+      double p12 = gy - stage[i].state[0] * g12 - stage[i].state[2] * g22;
+
+      Qn.coeffRef(0, 0) += -Sobs * g11;
+      Qn.coeffRef(0, 2) += -Sobs * g12;
+      Qn.coeffRef(2, 0) += -Sobs * g21;
+      Qn.coeffRef(2, 2) += -Sobs * g22;
+
+      qn.coeffRef(0, 0) += -Sobs * p11;
+      qn.coeffRef(2, 0) += -Sobs * p12;
     }
     sp::colMajor::setBlock(Q, Qn, state_dim_ * i, state_dim_ * i);
     sp::colMajor::setBlock(q, qn, state_dim_ * i, 0);
