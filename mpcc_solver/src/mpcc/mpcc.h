@@ -97,4 +97,8 @@ class Mpcc {
                     std::vector<double>& error,
                     Eigen::SparseMatrix<double>& dEc,
                     Eigen::SparseMatrix<double>& dEl);
+  void chance_constrains_set(std::vector<double>& coeff,
+                                 std::vector<double> obst,
+                                 std::vector<double> ego);
+  double normsinv(const double p);
 };

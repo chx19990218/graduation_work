@@ -159,18 +159,23 @@ void Mpcc::CalculateCost(const Resample& referenceline) {
                Eigen::SparseMatrix<double>(dEl.transpose());
     }
     bool chance_constrain_flag = true;
-    double Sobs = 0.1;
+    double Sobs = 0.01;
     double x0 = 0.5;
     double y0 = 3.0;
-    double kesi = -0.01;
+    
     if (chance_constrain_flag) {
-      double denom = std::pow(stage[i].state[0] - x0, 2) + std::pow(stage[i].state[2] - y0, 2) + kesi;
-      double g11 = 2 * (-std::pow(stage[i].state[0] - x0, 2) + std::pow(stage[i].state[2] - y0, 2) + kesi) / std::pow(denom, 2);
-      double g12 = -4 * (stage[i].state[0] - x0) * (stage[i].state[2] - y0) / std::pow(denom, 2);
-      double g21 = g12;
-      double g22 = 2 * (std::pow(stage[i].state[0] - x0, 2) - std::pow(stage[i].state[2] - y0, 2) + kesi) / std::pow(denom, 2);
-      double gx = 2 * (stage[i].state[0] - x0) / denom;
-      double gy = 2 * (stage[i].state[2] - y0) / denom;
+      std::vector<double> obst{x0, y0};
+      std::vector<double> ego{stage[i].state[0], stage[i].state[2]};
+      std::vector<double> coeff(6, 0.0);
+      chance_constrains_set(coeff, obst, ego);
+
+      double g11 = coeff[0];
+      double g12 = coeff[1];
+      double g21 = coeff[2];
+      double g22 = coeff[3];
+      double gx = coeff[4];
+      double gy = coeff[5];
+      
       double p11 = gx - stage[i].state[0] * g11 - stage[i].state[2] * g21;
       double p12 = gy - stage[i].state[0] * g12 - stage[i].state[2] * g22;
 
