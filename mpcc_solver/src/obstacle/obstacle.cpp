@@ -4,9 +4,9 @@
 #include "obstacle.h"
 
 void Obstacle::Update(const Resample& referenceline, const Map& map,
-                      Mpcc& mpcc) {
+                      Mpcc& mpcc, Eigen::SparseMatrix<double> state) {
   GenerateGridCoordinate(referenceline, map, mpcc);
-  DPForward(mpcc, referenceline);
+  DPForward(mpcc, referenceline, state);
   DPBackward(mpcc);
   ExpandPath(mpcc);
 }
@@ -64,7 +64,8 @@ void Obstacle::GenerateGridCoordinate(const Resample& referenceline,
   }
 }
 
-void Obstacle::DPForward(Mpcc& mpcc, const Resample& referenceline) {
+void Obstacle::DPForward(Mpcc& mpcc, const Resample& referenceline,
+    Eigen::SparseMatrix<double> state) {
   bool get_valid_next_flag;
   bool get_valid_path_flag = false;
   for (int layer = row_size - 2; layer >= 0; layer--) {
@@ -91,9 +92,9 @@ void Obstacle::DPForward(Mpcc& mpcc, const Resample& referenceline) {
           double similarity_cost =
               GetSimilarityCost(referenceline, layer, next_index);
           double length_cost =
-              GetLengthCost(mpcc, layer, now_index, next_index);
+              GetLengthCost(mpcc, layer, now_index, next_index, state);
           double angle_cost =
-              GetAngleCost(mpcc, layer, prev_index, now_index, next_index);
+              GetAngleCost(mpcc, layer, prev_index, now_index, next_index, state);
           // std::cout<<similarity_cost<<","<<length_cost<<","<<angle_cost<<std::endl;
           double total_cost;
           if (layer == row_size - 2) {
@@ -151,8 +152,8 @@ void Obstacle::DPForward(Mpcc& mpcc, const Resample& referenceline) {
     }
     double similarity_cost =
         GetSimilarityCost(referenceline, layer, next_index);
-    double length_cost = GetLengthCost(mpcc, layer, 0, next_index);
-    double angle_cost = GetAngleCost(mpcc, layer, 0, 0, next_index);
+    double length_cost = GetLengthCost(mpcc, layer, 0, next_index, state);
+    double angle_cost = GetAngleCost(mpcc, layer, 0, 0, next_index, state);
     double total_cost =
         similarity_weight * similarity_cost + length_weight * length_cost +
         angle_weight * angle_cost +
@@ -260,14 +261,14 @@ double Obstacle::GetSimilarityCost(const Resample& referenceline, int layer,
 }
 
 double Obstacle::GetLengthCost(Mpcc& mpcc, int layer, int now_index,
-                               int next_index) {
+                               int next_index, Eigen::SparseMatrix<double> state) {
   double x1, y1;
   if (layer >= 0) {
     x1 = grid_x_[layer][now_index];
     y1 = grid_y_[layer][now_index];
   } else {
-    x1 = mpcc.state.coeffRef(0, 0);
-    y1 = mpcc.state.coeffRef(2, 0);
+    x1 = state.coeffRef(0, 0);
+    y1 = state.coeffRef(2, 0);
   }
 
   double x2 = grid_x_[layer + 1][next_index];
@@ -276,20 +277,21 @@ double Obstacle::GetLengthCost(Mpcc& mpcc, int layer, int now_index,
 }
 
 double Obstacle::GetAngleCost(Mpcc& mpcc, int layer, int prev_index,
-                              int now_index, int next_index) {
+                              int now_index, int next_index,
+                              Eigen::SparseMatrix<double> state) {
   double x1, y1, x2, y2, x3, y3;
   x3 = grid_x_[layer + 1][next_index];
   y3 = grid_y_[layer + 1][next_index];
   double dx1, dy1, dx2, dy2;
   if (layer == -1) {
-    dx1 = mpcc.state.coeffRef(1, 0);
-    dy1 = mpcc.state.coeffRef(3, 0);
-    dx2 = x3 - mpcc.state.coeffRef(0, 0);
-    dy2 = y3 - mpcc.state.coeffRef(2, 0);
+    dx1 = state.coeffRef(1, 0);
+    dy1 = state.coeffRef(3, 0);
+    dx2 = x3 - state.coeffRef(0, 0);
+    dy2 = y3 - state.coeffRef(2, 0);
   } else {
     if (layer == 0) {
-      x1 = mpcc.state.coeffRef(0, 0);
-      y1 = mpcc.state.coeffRef(2, 0);
+      x1 = state.coeffRef(0, 0);
+      y1 = state.coeffRef(2, 0);
     } else {
       x1 = grid_x_[layer - 1][prev_index];
       y1 = grid_y_[layer - 1][prev_index];

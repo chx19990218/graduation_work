@@ -4,8 +4,6 @@
 #include "mpcc.h"
 
 Mpcc::Mpcc() {
-  state.resize(state_dim_, 1);
-
   Q.resize(horizon * state_dim_, horizon * state_dim_);
   identity.resize(horizon * state_dim_, horizon * state_dim_);
   for (int i = 0; i < horizon * state_dim_; i++) {
@@ -52,14 +50,10 @@ Mpcc::Mpcc() {
   statePredict.resize(state_dim_, horizon);
 }
 
-void Mpcc::Init(const Resample& referenceline) {
-  max_theta_ = referenceline.spline.getLength();
-
-  state.coeffRef(0, 0) = 0.5;
-  state.coeffRef(2, 0) = 1.5;
-  UpdateState(referenceline);
-
+void Mpcc::Init(const Resample& referenceline, Eigen::SparseMatrix<double> state) {
+  max_theta_ = referenceline.spline.getLength(); 
   optimal_theta.clear();
+  // 初速度为0,初始轨迹为匀加速
   double v = 1.0;
   double a = v / (Ts * horizon);
   double x, y, theta;
@@ -75,10 +69,11 @@ void Mpcc::Init(const Resample& referenceline) {
     stage.emplace_back(stage_i);
     optimal_theta.emplace_back(theta);
   }
-
 }
 
-void Mpcc::UpdateState(const Resample& referenceline) {
+// 投影更新theta
+void Mpcc::UpdateState(const Resample& referenceline,
+    Eigen::SparseMatrix<double>& state) {
   double now_x = state.coeffRef(0, 0);
   double now_y = state.coeffRef(2, 0);
   double now_theta = referenceline.spline.porjectOnSpline(now_x, now_y);
@@ -102,7 +97,8 @@ void Mpcc::RecedeOneHorizon(const Resample& referenceline) {
   stage.emplace_back(new_stage);
 }
 
-void Mpcc::CalculateCost(const Resample& referenceline) {
+void Mpcc::CalculateCost(const Resample& referenceline,
+    Eigen::SparseMatrix<double> state) {
   double Qc = 1.0;
   double Ql = 5.0;
   double gamma = 10.0;
@@ -276,12 +272,12 @@ void Mpcc::GetErrorInfo(const Resample& referenceline, const Stage& stage,
   dEl.coeffRef(0, state_dim_ - 1) = lag_error__theta;
 }
 
-void Mpcc::SolveQp(const Resample& referenceline, const Map& map) {
-  UpdateState(referenceline);
+void Mpcc::SolveQp(const Resample& referenceline, const Map& map,
+    Eigen::SparseMatrix<double> state) {
   RecedeOneHorizon(referenceline);
 
-  SetConstrains(referenceline, map);
-  CalculateCost(referenceline);
+  SetConstrains(referenceline, map, state);
+  CalculateCost(referenceline, state);
 
 
   osqpInterface.updateMatrices(H, f, A, b, C, clow, cupp, ul, uu);
@@ -292,28 +288,16 @@ void Mpcc::SolveQp(const Resample& referenceline, const Map& map) {
 
   if (solveStatus == OSQP_SOLVED) {
     optimal_theta.clear();
-    theta_x_.clear();
-    theta_y_.clear();
     Eigen::SparseMatrix<double> state_horizon = state;
-    // std::cout<<"state:"<<state<<std::endl;
     for (int i = 0; i < horizon; i++) {
       for (int j = 0; j < control_dim_; j++) {
         inputPredict.coeffRef(j, i) = solPtr->x[i * control_dim_ + j];
       }
+      // 计算对应优化状态
       state_horizon = Ad * state_horizon + Bd * inputPredict.col(i);
-      // std::cout<<inputPredict.col(i)<<std::endl;
-      if (i == 0) {
-        state = state_horizon;
-      }
-
       sp::colMajor::setCols(statePredict, state_horizon, i);
 
-      auto pos_theta = referenceline.spline.getPostion(
-          state_horizon.coeffRef(state_dim_ - 1, 0));
-      theta_x_.emplace_back(pos_theta(0));
-      theta_y_.emplace_back(pos_theta(1));
-      // std::cout<<pos_theta(0)<<","<<pos_theta(1)<<std::endl;
-
+      // 更新最优轨迹
       optimal_theta.emplace_back(state_horizon.coeffRef(state_dim_ - 1, 0));
       for (int j = 0; j < state_dim_; j++) {
         stage[i].state[j] = state_horizon.coeffRef(j, 0);
@@ -322,4 +306,27 @@ void Mpcc::SolveQp(const Resample& referenceline, const Map& map) {
   } else {
     std::cout << "no solution" << std::endl;
   }
+}
+
+void Mpcc::UpdateResultForPlot(const Resample& referenceline,
+    Eigen::SparseMatrix<double> state) {
+  theta_x_.clear();
+  theta_y_.clear();
+  x_horizon.clear();
+  y_horizon.clear();
+  // horizon theta
+  for (int i = 0; i < horizon; i++) {
+    // horizon theta
+    auto pos_theta = referenceline.spline.getPostion(
+      statePredict.coeffRef(state_dim_ - 1, i));
+    theta_x_.emplace_back(pos_theta(0));
+    theta_y_.emplace_back(pos_theta(1));
+
+    // horizon
+    x_horizon.emplace_back(statePredict.coeffRef(0, i));
+    y_horizon.emplace_back(statePredict.coeffRef(2, i));
+  }
+  // history
+  x_history.emplace_back(state.coeffRef(0, 0));
+  y_history.emplace_back(state.coeffRef(2, 0));
 }

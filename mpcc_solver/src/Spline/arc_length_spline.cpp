@@ -84,161 +84,149 @@ PathData ArcLengthSpline::resamplePath(const CubicSpline &initial_spline_x,const
     return resampled_path;
 }
 
-RawPath ArcLengthSpline::outlierRemoval(const Eigen::VectorXd &X_original,const Eigen::VectorXd &Y_original) const
-{
+RawPath ArcLengthSpline::outlierRemoval(const Eigen::VectorXd &X_original,
+    const Eigen::VectorXd &Y_original) const {
+  // remove points which are not at all equally spaced, to avoid fitting problems
 
-    // remove points which are not at all equally spaced, to avoid fitting problems
+  // compute mean distance between points and then process the points such that points
+  // are not closer than 0.75 the mean distance
 
-    // compute mean distance between points and then process the points such that points
-    // are not closer than 0.75 the mean distance
+  double dx,dy;       // difference between points in x and y
+  Eigen::VectorXd distVec;   // vector with all the distances
+  double meanDist;    // mean distance
+  double dist;        // temp variable for distance
+  RawPath resampled_path;
+  int k = 0;          // indecies
+  int j = 0;
 
-    double dx,dy;       // difference between points in x and y
-    Eigen::VectorXd distVec;   // vector with all the distances
-    double meanDist;    // mean distance
-    double dist;        // temp variable for distance
-    RawPath resampled_path;
-    int k = 0;          // indecies
-    int j = 0;
-
-    if (X_original.size() != Y_original.size()){
-        //error
-    }
+  if (X_original.size() != Y_original.size()){
+      //error
+  }
 //    std::cout << X_original << std::endl;
 
-    int n_points = X_original.size();
+  int n_points = X_original.size();
 
-    // initialize with zero
-    resampled_path.X.setZero(n_points);
-    resampled_path.Y.setZero(n_points);
+  // initialize with zero
+  resampled_path.X.setZero(n_points);
+  resampled_path.Y.setZero(n_points);
 
 
 
-    // compute distance between points in X-Y data
-    distVec.setZero(n_points-1);
-    for(int i=0;i<n_points-1;i++){
-        dx = X_original(i+1)-X_original(i);
-        dy = Y_original(i+1)-Y_original(i);
-        distVec(i) = std::sqrt(dx*dx + dy*dy);
-    }
-    // compute mean distance between points
-    meanDist = distVec.sum()/(n_points-1);
+  // compute distance between points in X-Y data
+  distVec.setZero(n_points-1);
+  for(int i=0;i<n_points-1;i++){
+      dx = X_original(i+1)-X_original(i);
+      dy = Y_original(i+1)-Y_original(i);
+      distVec(i) = std::sqrt(dx*dx + dy*dy);
+  }
+  // compute mean distance between points
+  meanDist = distVec.sum()/(n_points-1);
 
-    // compute the new points
-    // start point is the original start point
-    resampled_path.X(k) = X_original(k);
-    resampled_path.Y(k) = Y_original(k);
-    k++;
-    for(int i=1;i<n_points-1;i++){
-        // compute distance between currently checked point and the one last added to the new X-Y path
-        dx = X_original(i)-X_original(j);
-        dy = Y_original(i)-Y_original(j);
-        dist = std::sqrt(dx*dx + dy*dy);
-        // if this distance is smaller than 0.7 the mean distance add this point to the new X-Y path
-        if(dist >= 0.7*meanDist)
-        {
-            resampled_path.X(k) = X_original(i);
-            resampled_path.Y(k) = Y_original(i);
-            k++;
-            j = i;
-        }
-    }
-    // always add the last point
-    resampled_path.X(k) = X_original(n_points-1);
-    resampled_path.Y(k) = Y_original(n_points-1);
-    k++;
+  // compute the new points
+  // start point is the original start point
+  resampled_path.X(k) = X_original(k);
+  resampled_path.Y(k) = Y_original(k);
+  k++;
+  for(int i=1;i<n_points-1;i++){
+      // compute distance between currently checked point and the one last added to the new X-Y path
+      dx = X_original(i)-X_original(j);
+      dy = Y_original(i)-Y_original(j);
+      dist = std::sqrt(dx*dx + dy*dy);
+      // if this distance is smaller than 0.7 the mean distance add this point to the new X-Y path
+      if(dist >= 0.7*meanDist)
+      {
+          resampled_path.X(k) = X_original(i);
+          resampled_path.Y(k) = Y_original(i);
+          k++;
+          j = i;
+      }
+  }
+  // always add the last point
+  resampled_path.X(k) = X_original(n_points-1);
+  resampled_path.Y(k) = Y_original(n_points-1);
+  k++;
 
 //    std::cout << "not resiszed " << X_new.transpose() << std::endl;
-    // set the new X-Y data
+  // set the new X-Y data
 //    setData(X.head(k),Y.head(k));
-    resampled_path.X.conservativeResize(k);
-    resampled_path.Y.conservativeResize(k);
+  resampled_path.X.conservativeResize(k);
+  resampled_path.Y.conservativeResize(k);
 
 //    std::cout << "resiszed " << X_new.transpose()  << std::endl;
-    return resampled_path;
+  return resampled_path;
 }
 
-double ArcLengthSpline::unwrapInput(double x) const
-{
+double ArcLengthSpline::unwrapInput(double x) const {
     double x_max = getLength();
     return x - x_max*std::floor(x/x_max);
 }
 
-void ArcLengthSpline::fitSpline(const Eigen::VectorXd &X,const Eigen::VectorXd &Y)
-{
-    // successively fit spline -> re-sample path -> compute arc length
-    // temporary spline class only used for fitting
-    Eigen::VectorXd s_approximation;
-    PathData first_refined_path,second_refined_path;
-    double total_arc_length;
+void ArcLengthSpline::fitSpline(const Eigen::VectorXd &X,const Eigen::VectorXd &Y){
+  // successively fit spline -> re-sample path -> compute arc length
+  // temporary spline class only used for fitting
+  Eigen::VectorXd s_approximation;
+  PathData first_refined_path,second_refined_path;
+  double total_arc_length;
 
-    s_approximation = compArcLength(X,Y);
-//    std::cout << s_approximation << std::endl;
-    total_arc_length = s_approximation(s_approximation.size()-1);
+  s_approximation = compArcLength(X,Y);
+  total_arc_length = s_approximation(s_approximation.size()-1);
 
-    CubicSpline first_spline_x,first_spline_y;
-    CubicSpline second_spline_x,second_spline_y;
-    // 1. spline fit
-    first_spline_x.genSpline(s_approximation,X,false);
-    first_spline_y.genSpline(s_approximation,Y,false);
-    // 1. re-sample
-    first_refined_path = resamplePath(first_spline_x,first_spline_y,total_arc_length);
-    s_approximation = compArcLength(first_refined_path.X,first_refined_path.Y);
+  CubicSpline first_spline_x,first_spline_y;
+  CubicSpline second_spline_x,second_spline_y;
+  // 1. spline fit
+  first_spline_x.genSpline(s_approximation,X,false);
+  first_spline_y.genSpline(s_approximation,Y,false);
+  // 1. re-sample
+  first_refined_path = resamplePath(first_spline_x,first_spline_y,total_arc_length);
+  s_approximation = compArcLength(first_refined_path.X,first_refined_path.Y);
+  total_arc_length = s_approximation(s_approximation.size()-1);
 
-    total_arc_length = s_approximation(s_approximation.size()-1);
-    ////////////////////////////////////////////
-    // 2. spline fit
-    second_spline_x.genSpline(s_approximation,first_refined_path.X,false);
-    second_spline_y.genSpline(s_approximation,first_refined_path.Y,false);
-    // 2. re-sample
-    second_refined_path = resamplePath(second_spline_x,second_spline_y,total_arc_length);
-    ////////////////////////////////////////////
-    setRegularData(second_refined_path.X,second_refined_path.Y,second_refined_path.s);
-//    setData(second_refined_path.X,second_refined_path.Y);
-    // Final spline fit with fixed Delta_s
-    spline_x_.genSpline(path_data_.s,path_data_.X,true);
-    spline_y_.genSpline(path_data_.s,path_data_.Y,true);
+  // 2. spline fit
+  second_spline_x.genSpline(s_approximation,first_refined_path.X,false);
+  second_spline_y.genSpline(s_approximation,first_refined_path.Y,false);
+  // 2. re-sample
+  second_refined_path = resamplePath(second_spline_x,second_spline_y,total_arc_length);
+  ////////////////////////////////////////////
+  setRegularData(second_refined_path.X,second_refined_path.Y,second_refined_path.s);
 
-
+  // Final spline fit with fixed Delta_s
+  spline_x_.genSpline(path_data_.s,path_data_.X,true);
+  spline_y_.genSpline(path_data_.s,path_data_.Y,true);
 }
 
-void ArcLengthSpline::gen2DSpline(const Eigen::VectorXd &X,const Eigen::VectorXd &Y)
-{
-    // generate 2-D arc length parametrized spline given X-Y data
+void ArcLengthSpline::gen2DSpline(const Eigen::VectorXd &X,const Eigen::VectorXd &Y) {
+  // generate 2-D arc length parametrized spline given X-Y data
 
-    // remove outliers, depending on how iregular the points are this can help
-    RawPath clean_path;
-    clean_path = outlierRemoval(X,Y);
-    // successively fit spline and re-sample
-    fitSpline(clean_path.X,clean_path.Y);
-
+  // remove outliers, depending on how iregular the points are this can help
+  RawPath clean_path;
+  clean_path = outlierRemoval(X,Y);
+  // successively fit spline and re-sample
+  fitSpline(clean_path.X,clean_path.Y);
 }
 
 
-Eigen::Vector2d ArcLengthSpline::getPostion(const double s) const
-{
-    Eigen::Vector2d s_path;
-    s_path(0) = spline_x_.getPoint(s);
-    s_path(1) = spline_y_.getPoint(s);
+Eigen::Vector2d ArcLengthSpline::getPostion(const double s) const {
+  Eigen::Vector2d s_path;
+  s_path(0) = spline_x_.getPoint(s);
+  s_path(1) = spline_y_.getPoint(s);
 
-    return s_path;
+  return s_path;
 }
 
-Eigen::Vector2d ArcLengthSpline::getDerivative(const double s) const
-{
-    Eigen::Vector2d ds_path;
-    ds_path(0) = spline_x_.getDerivative(s);
-    ds_path(1) = spline_y_.getDerivative(s);
+Eigen::Vector2d ArcLengthSpline::getDerivative(const double s) const {
+  Eigen::Vector2d ds_path;
+  ds_path(0) = spline_x_.getDerivative(s);
+  ds_path(1) = spline_y_.getDerivative(s);
 
-    return ds_path;
+  return ds_path;
 }
 
-Eigen::Vector2d ArcLengthSpline::getSecondDerivative(const double s) const
-{
-    Eigen::Vector2d dds_path;
-    dds_path(0) = spline_x_.getSecondDerivative(s);
-    dds_path(1) = spline_y_.getSecondDerivative(s);
+Eigen::Vector2d ArcLengthSpline::getSecondDerivative(const double s) const {
+  Eigen::Vector2d dds_path;
+  dds_path(0) = spline_x_.getSecondDerivative(s);
+  dds_path(1) = spline_y_.getSecondDerivative(s);
 
-    return dds_path;
+  return dds_path;
 }
 
 double ArcLengthSpline::getLength() const
@@ -246,39 +234,38 @@ double ArcLengthSpline::getLength() const
     return path_data_.s(path_data_.n_points-1);
 }
 
-double ArcLengthSpline::porjectOnSpline(double x, double y) const
-{
-    Eigen::Vector2d pos;
-    pos(0) = x;
-    pos(1) = y;
+double ArcLengthSpline::porjectOnSpline(double x, double y) const {
+  Eigen::Vector2d pos;
+  pos(0) = x;
+  pos(1) = y;
 
-    // std::cout << "dist too large" << std::endl;
-    Eigen::ArrayXd diff_x_all = path_data_.X.array() - pos(0);
-    Eigen::ArrayXd diff_y_all = path_data_.Y.array() - pos(1);
-    Eigen::ArrayXd dist_square = diff_x_all.square() + diff_y_all.square();
-    std::vector<double> dist_square_vec(dist_square.data(),dist_square.data() + dist_square.size());
-    auto min_iter = std::min_element(dist_square_vec.begin(),dist_square_vec.end());
-    double s_opt = path_data_.s(std::distance(dist_square_vec.begin(), min_iter));
+  // std::cout << "dist too large" << std::endl;
+  Eigen::ArrayXd diff_x_all = path_data_.X.array() - pos(0);
+  Eigen::ArrayXd diff_y_all = path_data_.Y.array() - pos(1);
+  Eigen::ArrayXd dist_square = diff_x_all.square() + diff_y_all.square();
+  std::vector<double> dist_square_vec(dist_square.data(),dist_square.data() + dist_square.size());
+  auto min_iter = std::min_element(dist_square_vec.begin(),dist_square_vec.end());
+  double s_opt = path_data_.s(std::distance(dist_square_vec.begin(), min_iter));
 
-    double s_old = s_opt;
-    for(int i=0; i<20; i++)
-    {
-        auto pos_path = getPostion(s_opt);
-        Eigen::Vector2d ds_path = getDerivative(s_opt);
-        Eigen::Vector2d dds_path = getSecondDerivative(s_opt);
-        Eigen::Vector2d diff = pos_path - pos;
-        double jac = 2.0 * diff(0) * ds_path(0) + 2.0 * diff(1) * ds_path(1);
-        double hessian = 2.0 * ds_path(0) * ds_path(0) + 2.0 * diff(0) * dds_path(0) +
-                         2.0 * ds_path(1) * ds_path(1) + 2.0 * diff(1) * dds_path(1);
-        // Newton method
-        s_opt -= jac/hessian;
-        s_opt = unwrapInput(s_opt);
+  double s_old = s_opt;
+  for(int i=0; i<20; i++)
+  {
+      auto pos_path = getPostion(s_opt);
+      Eigen::Vector2d ds_path = getDerivative(s_opt);
+      Eigen::Vector2d dds_path = getSecondDerivative(s_opt);
+      Eigen::Vector2d diff = pos_path - pos;
+      double jac = 2.0 * diff(0) * ds_path(0) + 2.0 * diff(1) * ds_path(1);
+      double hessian = 2.0 * ds_path(0) * ds_path(0) + 2.0 * diff(0) * dds_path(0) +
+                        2.0 * ds_path(1) * ds_path(1) + 2.0 * diff(1) * dds_path(1);
+      // Newton method
+      s_opt -= jac/hessian;
+      s_opt = unwrapInput(s_opt);
 
 //        std::cout << std::abs(s_old - s_opt) << std::endl;
-        if(std::abs(s_old - s_opt) <= 1e-5)
-            return s_opt;
-        s_old = s_opt;
-    }
-    // something is strange if it did not converge within 20 iterations, give back the initial guess
-    return s_opt;
+      if(std::abs(s_old - s_opt) <= 1e-5)
+          return s_opt;
+      s_old = s_opt;
+  }
+  // something is strange if it did not converge within 20 iterations, give back the initial guess
+  return s_opt;
 }

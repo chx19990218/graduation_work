@@ -41,14 +41,15 @@ class Obstacle {
                                            Eigen::Vector2d vec_v);
   double GetSimilarityCost(const Resample& referenceline, int layer,
                            int next_index);
-  double GetLengthCost(Mpcc& mpcc, int layer, int now_index, int next_index);
+  double GetLengthCost(Mpcc& mpcc, int layer, int now_index, int next_index,
+                      Eigen::SparseMatrix<double> state);
   double GetAngleCost(Mpcc& mpcc, int layer, int prev_index, int now_index,
-                      int next_index);
+                      int next_index, Eigen::SparseMatrix<double> state);
   bool PathIsObstructed(int layer, int now_index, int next_index);
-  void DPForward(Mpcc& mpcc, const Resample& referenceline);
+  void DPForward(Mpcc& mpcc, const Resample& referenceline, Eigen::SparseMatrix<double> state);
   void DPBackward(Mpcc& mpcc);
   void ExpandPath(Mpcc& mpcc);
   
   void Update(const Resample& referenceline, const Map& map,
-                      Mpcc& mpcc);
+                      Mpcc& mpcc, Eigen::SparseMatrix<double> state);
 };

@@ -11,4 +11,6 @@ class Resample {
  public:
   ArcLengthSpline spline;
   void FitResample(const Smooth& smooth);
+  std::vector<double> x;
+  std::vector<double> y;
 };

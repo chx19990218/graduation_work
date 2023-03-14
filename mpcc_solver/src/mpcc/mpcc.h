@@ -28,7 +28,7 @@ class Mpcc {
   int state_dim_ = 5;
   // ax ay az v_theta
   int control_dim_ = 3;
-  int horizon = 20;
+  int horizon = 15;
   bool init_status = true;
   double Ts = 0.02;
   double max_theta_;
@@ -64,7 +64,7 @@ class Mpcc {
   Eigen::SparseMatrix<double> statePredict;
 
   std::vector<double> optimal_theta = std::vector<double>(horizon);
-  Eigen::SparseMatrix<double> state;
+
   std::vector<double> x_history, y_history;
   std::vector<double> x_horizon, y_horizon;
   std::vector<double> theta_x_;
@@ -78,16 +78,18 @@ class Mpcc {
   std::vector<double> right_border_y;
 
   Mpcc();
-  void Init(const Resample& referenceline);
-  void UpdateState(const Resample& referenceline);
-  void CalculateCost(const Resample& referenceline);
+  void Init(const Resample& referenceline, Eigen::SparseMatrix<double> state);
+  void UpdateState(const Resample& referenceline, Eigen::SparseMatrix<double>& state);
+  void CalculateCost(const Resample& referenceline, Eigen::SparseMatrix<double> state);
   void RecedeOneHorizon(const Resample& referenceline);
-  void SolveQp(const Resample& referenceline, const Map& map);
+  void SolveQp(const Resample& referenceline, const Map& map,
+    Eigen::SparseMatrix<double> state);
   int GetStage(const Map& map, double x, double y);
   bool InRec(std::vector<std::vector<double>>& rec, double x, double y);
-  void SetConstrains(const Resample& referenceline, const Map& map);
+  void SetConstrains(const Resample& referenceline, const Map& map,
+    Eigen::SparseMatrix<double> state);
   std::vector<double> GetPointBorderConstrain(const Map& map, double x,
-                                              double y);
+                                              double, const Resample& referenceline);
   std::vector<double> GetVerticalPoint(double x1, double y1, double x2,
                                        double y2, double x3, double y3);
   void GetRefPoint(const Resample& referenceline, const double s,
@@ -101,4 +103,6 @@ class Mpcc {
                                  std::vector<double> obst,
                                  std::vector<double> ego);
   double normsinv(const double p);
+  void UpdateResultForPlot(const Resample& referenceline,
+      Eigen::SparseMatrix<double> state);
 };

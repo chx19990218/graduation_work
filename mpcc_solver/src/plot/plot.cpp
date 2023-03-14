@@ -56,7 +56,7 @@ void Plot::plot(const Map& map, const Search& search, const Smooth& smooth,
   Option option7(color_map[Blue], line_map[One]);
   plt::named_plot("history", mpcc.x_history, mpcc.y_history, option7.color_ + option7.line_);
 
-  // history
+  // horizon
   Option option8(color_map[Blue], line_map[Seven]);
   plt::named_plot("horizon", mpcc.x_horizon, mpcc.y_horizon, option8.color_ + option8.line_);
 

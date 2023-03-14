@@ -27,37 +27,68 @@ int main(int argc, char** argv)
   Mpcc mpcc;
   Obstacle obstacle;
   Plot plot;
+  
+  // 1. gernerate map
+  auto generate_map_start_time = ros::Time::now();
   map.GenerateMap();
-  search.SphereSearch(map);
-  smooth.Fem(search);
-  resample.FitResample(smooth);
+  auto generate_map_end_time = ros::Time::now();
+  std::cout << "1. generate map finished in "
+    << (generate_map_end_time - generate_map_start_time).toSec() << "s" << std::endl;
 
-  mpcc.state.coeffRef(0, 0) = 0.5;
-  mpcc.state.coeffRef(1, 0) = 0.0;
-  mpcc.state.coeffRef(2, 0) = 1.8;
-  mpcc.state.coeffRef(3, 0) = 1.0;
-  obstacle.Update(resample, map, mpcc);
+  // 2. search
+  auto search_start_time = ros::Time::now();
+  search.SphereSearch(map);
+  auto search_end_time = ros::Time::now();
+  std::cout << "2. search finished in "
+    << (search_end_time - search_start_time).toSec() << "s" << std::endl;
+
+  // 3. smooth
+  auto smooth_start_time = ros::Time::now();
+  smooth.Fem(search);
+  auto smooth_end_time = ros::Time::now();
+  std::cout << "3. smooth finished in "
+    << (smooth_end_time - smooth_start_time).toSec() << "s" << std::endl;
+
+  // 4. fit and resample
+  auto resample_start_time = ros::Time::now();
+  resample.FitResample(smooth);
+  auto resample_end_time = ros::Time::now();
+  std::cout << "4. resample finished in "
+    << (resample_end_time - resample_start_time).toSec() << "s" << std::endl;
+
+
+  Eigen::SparseMatrix<double> state;
+  state.resize(mpcc.state_dim_, 1);
+  state.coeffRef(0, 0) = 0.5;
+  state.coeffRef(1, 0) = 0.0;
+  state.coeffRef(2, 0) = 0.7;
+  state.coeffRef(3, 0) = 0.0;
+  obstacle.Update(resample, map, mpcc, state);
   
   
-  int cnt = 1;
-  mpcc.Init(resample);
+  int cnt = 500;
+  mpcc.UpdateState(resample, state);
+  mpcc.Init(resample, state);
   for (int i = 0; i < cnt; i++) { 
     if (i % 10 == 0){
       std::cout<<"sim times:"<<i<<std::endl;
     } 
     auto start_time = ros::Time::now();
-    mpcc.SolveQp(resample, map);
+    // 更新theta
+    mpcc.UpdateState(resample, state);
+    // 求解mpcc
+    mpcc.SolveQp(resample, map, state);
     auto end_time = ros::Time::now();
-    // std::cout << (end_time - start_time).toSec() << std::endl;
-    mpcc.x_history.emplace_back(mpcc.state.coeffRef(0, 0));
-    mpcc.y_history.emplace_back(mpcc.state.coeffRef(2, 0));
+    std::cout << (end_time - start_time).toSec() << std::endl;
 
+    // 仿真,先用mpcc预测第一帧
+    state = mpcc.statePredict.col(0);
+
+    // 更新绘图内容
+    mpcc.UpdateResultForPlot(resample, state);
   }
   
-  for (int i=0; i<mpcc.horizon; i++){
-    mpcc.x_horizon.emplace_back(mpcc.statePredict.coeffRef(0, i));
-    mpcc.y_horizon.emplace_back(mpcc.statePredict.coeffRef(2, i));
-  }
+  
 
   plot.plot(map, search, smooth, resample, mpcc, obstacle);
 
