@@ -39,7 +39,7 @@ int main(int argc, char** argv)
   obstacle.Update(resample, map, mpcc);
   
   
-  int cnt = 100;
+  int cnt = 1;
   mpcc.Init(resample);
   for (int i = 0; i < cnt; i++) { 
     if (i % 10 == 0){

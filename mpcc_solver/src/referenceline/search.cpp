@@ -154,6 +154,10 @@ void Search::ResampleBorder(const Map& map, int last_index, int now_index,
 void Search::SphereSearch(const Map& map) {
   // 设置起始位置
   double now_x = 0.5, now_y = 0.5;
+  double start_x = now_x;
+  double start_y = now_y;
+  result_x.emplace_back(start_x);
+  result_y.emplace_back(start_y);
   // 设置搜索方向
   Eigen::Vector2d search_direction(0.0, 1.0);
 
@@ -179,6 +183,8 @@ void Search::SphereSearch(const Map& map) {
     result_x.emplace_back(now_x);
     result_y.emplace_back(now_y);
   }
+  result_x.emplace_back(start_x);
+  result_y.emplace_back(start_y);
 }
 
 void Search::ReviseSearchDirection(double& now_x, double& now_y,

@@ -10,6 +10,7 @@ class Smooth {
  public:
   Eigen::MatrixXd matrix_a_smooth_;
   Eigen::MatrixXd matrix_a_length_;
+  Eigen::MatrixXd matrix_a_similarity_;
   std::vector<double> result_x;
   std::vector<double> result_y;
   void Fem(const Search& search);
