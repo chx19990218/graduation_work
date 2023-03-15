@@ -99,9 +99,11 @@ void Mpcc::RecedeOneHorizon(const Resample& referenceline) {
 
 void Mpcc::CalculateCost(const Resample& referenceline,
     Eigen::SparseMatrix<double> state) {
-  double Qc = 1.0;
-  double Ql = 5.0;
-  double gamma = 10.0;
+      //20 10 50
+  double Qc = 20.0;
+  double Ql = 10.0;
+  double gamma = 5.0;
+  double q_u = 0.01;
   // double gamma = 0.001;
   Eigen::SparseMatrix<double> Qn;
   Eigen::SparseMatrix<double> qn;
@@ -154,7 +156,7 @@ void Mpcc::CalculateCost(const Resample& referenceline,
            2 * gain * Ql * (error[1] - l.coeffRef(0, 0)) *
                Eigen::SparseMatrix<double>(dEl.transpose());
     }
-    bool chance_constrain_flag = true;
+    bool chance_constrain_flag = false;
     double Sobs = 0.01;
     double x0 = 0.5;
     double y0 = 3.0;
@@ -189,9 +191,9 @@ void Mpcc::CalculateCost(const Resample& referenceline,
 
   Eigen::SparseMatrix<double> progress(control_dim_ * horizon, 1);
   for (int i = 0; i < horizon; i++) {
-    progress.coeffRef(control_dim_ * i + control_dim_ - 1, 0) = gamma;
+    progress.coeffRef(control_dim_ * i + control_dim_ - 1, 0) = gamma * Ts;
   }
-  H = BBT * Q * BB;
+  H = BBT * Q * BB  + q_u * Eigen::MatrixXd::Identity(control_dim_ * horizon, control_dim_ * horizon);
   f = BBT * Q * AA * state + BBT * q - progress;
 }
 

@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.0.2)
 project(mpcc_solver)
 
 find_package(catkin REQUIRED COMPONENTS
+  quadrotor_msgs
   geometry_msgs
   roscpp
   std_msgs
@@ -29,6 +30,7 @@ include_directories(
   src/utils
   src/plot
   src/obstacle
+  src/test
   /usr/local/include/osqp
 )
 add_executable(mpcc_node 
@@ -45,6 +47,7 @@ add_executable(mpcc_node
   src/referenceline/search.cpp
   src/referenceline/smooth.cpp
   src/referenceline/resample.cpp
+  # src/test/generate_map_test.cpp
 )
 
 target_link_libraries(mpcc_node ${PYTHON_LIBRARIES})

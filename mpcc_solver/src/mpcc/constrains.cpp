@@ -27,8 +27,10 @@ void Mpcc::SetConstrains(const Resample& referenceline, const Map& map,
 
     Cx.coeffRef(i, i * state_dim_ + 0) = numer;
     Cx.coeffRef(i, i * state_dim_ + 2) = -denom;
-    xup.coeffRef(i, 0) = dbmax;
-    xlow.coeffRef(i, 0) = dbmin;
+    // xup.coeffRef(i, 0) = dbmax;
+    // xlow.coeffRef(i, 0) = dbmin;
+    xup.coeffRef(i, 0) = 100000;
+    xlow.coeffRef(i, 0) = -100000;
   }
   // std::cout << std::endl;
   // 速度限制
@@ -41,7 +43,7 @@ void Mpcc::SetConstrains(const Resample& referenceline, const Map& map,
   // 加速度/角度,里程速度限制限制
   double max_attitude = 45.0 * PI / 180.0;
   double max_a = 9.8 * std::tan(max_attitude);
-  double max_v = 1.0;
+  double max_v = 3.0;
   for (int i = 0; i < horizon; i++) {
     // x轴控制量上限
     Eigen::SparseMatrix<double> Ck1(1, horizon * control_dim_);
@@ -84,12 +86,12 @@ std::vector<double> Mpcc::GetPointBorderConstrain(const Map& map, double x,
 
   std::vector<double> res(4);
   if (stage_index >= 0) {
-    // 进入障碍区，后续更新进入条件
-    if (y > 2.0 && y < 4.0 && x < 1.0) {
+    // // 进入障碍区，后续更新进入条件
+    // if (y > 2.0 && y < 4.0 && x < 1.0) {
       
-      res = GetBorder(x, y);
+    //   res = GetBorder(x, y);
       
-    } else { // 没进入障碍区
+    // } else { // 没进入障碍区
       // 直接用参考线向两侧拓展一个半径
       double s = referenceline.spline.porjectOnSpline(x, y);
       auto center_p = referenceline.spline.getPostion(s);
@@ -118,7 +120,7 @@ std::vector<double> Mpcc::GetPointBorderConstrain(const Map& map, double x,
       // std::vector<double> inner_vertical_point = GetVerticalPoint(x1, y1, x2, y2, x, y);
       // res[2] = inner_vertical_point[0];
       // res[3] = inner_vertical_point[1];
-    }
+    // }
   }
   return res;
 }
