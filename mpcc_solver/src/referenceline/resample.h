@@ -6,11 +6,12 @@
 #include <eigen3/Eigen/Dense>
 
 #include "smooth.h"
+#include "config.h"
 
 class Resample {
  public:
   ArcLengthSpline spline;
-  void FitResample(const Smooth& smooth);
+  void FitResample(const Smooth& smooth, const Config& config);
   std::vector<double> x;
   std::vector<double> y;
 };

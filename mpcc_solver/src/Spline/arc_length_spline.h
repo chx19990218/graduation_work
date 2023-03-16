@@ -28,7 +28,7 @@ struct PathData{
 class ArcLengthSpline {
 public:
     // X and Y spline used for final spline fit
-    void gen2DSpline(const Eigen::VectorXd &X,const Eigen::VectorXd &Y);
+    void gen2DSpline(const Eigen::VectorXd &X, const Eigen::VectorXd &Y, const Config& config);
     Eigen::Vector2d getPostion(double) const;
     Eigen::Vector2d getDerivative(double) const;
     Eigen::Vector2d getSecondDerivative(double) const;

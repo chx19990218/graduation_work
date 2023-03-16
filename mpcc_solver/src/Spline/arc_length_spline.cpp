@@ -2,13 +2,12 @@
 // Authors: Hongxu Cao (chx19990218@qq.com)
 
 #include "arc_length_spline.h"
+int N_SPLINE;
+ArcLengthSpline::ArcLengthSpline() { 
 
-ArcLengthSpline::ArcLengthSpline()
-{ 
 }
 
-void ArcLengthSpline::setData(const Eigen::VectorXd &X_in,const Eigen::VectorXd &Y_in)
-{
+void ArcLengthSpline::setData(const Eigen::VectorXd &X_in,const Eigen::VectorXd &Y_in) {
     // set input data if x and y have same length
     // compute arc length based on an piecewise linear approximation
     if(X_in.size() == Y_in.size()){
@@ -194,7 +193,9 @@ void ArcLengthSpline::fitSpline(const Eigen::VectorXd &X,const Eigen::VectorXd &
   spline_y_.genSpline(path_data_.s,path_data_.Y,true);
 }
 
-void ArcLengthSpline::gen2DSpline(const Eigen::VectorXd &X,const Eigen::VectorXd &Y) {
+void ArcLengthSpline::gen2DSpline(const Eigen::VectorXd &X,const Eigen::VectorXd &Y,
+    const Config& config) {
+  N_SPLINE = config.N_SPLINE;
   // generate 2-D arc length parametrized spline given X-Y data
 
   // remove outliers, depending on how iregular the points are this can help

@@ -1,3 +1,6 @@
+// Copyright @2022 HITCSC. All rights reserved.
+// Authors: Hongxu Cao (chx19990218@qq.com)
+
 #include <ros/ros.h>
 #include <matplotlibcpp.h>
 #include "config.h"
@@ -16,11 +19,21 @@
 #include <quadrotor_msgs/PositionCommand.h>
 
 void odom_callback(const nav_msgs::Odometry& odom);
-void mpc_callback(const ros::TimerEvent& event);
+void publish_topic(Mpcc& mpcc, const Resample& resample);
 
 Eigen::SparseMatrix<double> state(5, 1);
 ros::Time tOdom;
-nav_msgs::Path refTraj_msg;
+ros::Publisher drone_pub, theta_pub, predict_pub, theta_predict_pub, cmd_pub, refer_pub;
+
+geometry_msgs::Point tmpPoint;
+geometry_msgs::Vector3 tmpVector;
+quadrotor_msgs::PositionCommand cmdMsg;
+nav_msgs::Path trajPred_msg;
+nav_msgs::Path theta_trajPred_msg;
+geometry_msgs::PoseStamped tmpPose;
+geometry_msgs::Point pt;
+visualization_msgs::Marker drone_msg;
+visualization_msgs::Marker theta_msg;
 
 int main(int argc, char** argv) {
   ros::init(argc, argv, "mpcc_node");
@@ -29,16 +42,31 @@ int main(int argc, char** argv) {
 
   ros::Rate rate(50);
 
-  ros::Publisher drone_pub, global_pub, predict_pub, theta_predict_pub, cmd_pub, refer_pub;
   ros::Subscriber sub_odom = n.subscribe("odom", 100, odom_callback, ros::TransportHints().tcpNoDelay());
   refer_pub = n.advertise<nav_msgs::Path>("refer_path", 1);
   cmd_pub = n.advertise<quadrotor_msgs::PositionCommand>("position_cmd",1);
   drone_pub = n.advertise<visualization_msgs::Marker>("drone_pose", 1);
-  global_pub = n.advertise<visualization_msgs::Marker>("global_pose", 1);
+  theta_pub = n.advertise<visualization_msgs::Marker>("theta_pose", 1);
   predict_pub = n.advertise<nav_msgs::Path>("predict_path", 1);
   theta_predict_pub = n.advertise<nav_msgs::Path>("theta_predict_path", 1);
 
-  
+  theta_trajPred_msg.header.frame_id = "world";
+  trajPred_msg.header.frame_id = "world";
+  drone_msg.header.frame_id = "world";
+  drone_msg.type = visualization_msgs::Marker::ARROW;
+  drone_msg.action = visualization_msgs::Marker::ADD;
+  drone_msg.scale.x = 0.06;
+  drone_msg.scale.y = 0.1;
+  drone_msg.scale.z = 0;
+  drone_msg.color.a = 1;
+  drone_msg.color.r = 1;
+  drone_msg.color.g = 0;
+  drone_msg.color.b = 0;
+  drone_msg.pose.orientation.w = 1;
+  theta_msg = drone_msg;
+  theta_msg.color.r = 0;
+  theta_msg.color.g = 1;
+
   Map map;
   Search search;
   Smooth smooth;
@@ -46,8 +74,9 @@ int main(int argc, char** argv) {
   Mpcc mpcc;
   Obstacle obstacle;
   Plot plot;
+  Config config(nh);
 
-  // 生成pcd地图
+  // test : 测试生成pcd地图
   // GenerateMap();
   
   // 1. gernerate map
@@ -73,14 +102,14 @@ int main(int argc, char** argv) {
 
   // 4. fit and resample
   auto resample_start_time = ros::Time::now();
-  resample.FitResample(smooth);
+  resample.FitResample(smooth, config);
   auto resample_end_time = ros::Time::now();
   std::cout << "4. resample finished in "
     << (resample_end_time - resample_start_time).toSec() << "s" << std::endl;
 
-  // publish参考线
+  // publish rviz 参考线
+  nav_msgs::Path refTraj_msg;
   refTraj_msg.header.frame_id = "world";
-  geometry_msgs::PoseStamped tmpPose;
   double theta = 0;
   for (int i = 0; i < resample.spline.path_data_.X.size(); i++) {
     tmpPose.pose.position.x = resample.spline.path_data_.X(i);
@@ -89,6 +118,8 @@ int main(int argc, char** argv) {
     refTraj_msg.poses.push_back(tmpPose);
   }
   refer_pub.publish(refTraj_msg);
+
+  
 
   // obstacle.Update(resample, map, mpcc, state);
   
@@ -124,50 +155,27 @@ int main(int argc, char** argv) {
   while (ros::ok()) {
     ros::spinOnce();
     mpcc.UpdateState(resample, state);
-    mpcc.SolveQp(resample, map, state);
 
-    geometry_msgs::Point tmpPoint;
-    geometry_msgs::Vector3 tmpVector;
-    quadrotor_msgs::PositionCommand cmdMsg;
-    tmpPoint.x = mpcc.stage[0].state[0];
-    tmpPoint.y = mpcc.stage[0].state[2];
-    tmpPoint.z = 0.0;
-    cmdMsg.position = tmpPoint;
-    tmpVector.x = mpcc.stage[0].state[1];
-    tmpVector.y = mpcc.stage[0].state[3];
-    tmpVector.z = 0.0;
-    cmdMsg.velocity = tmpVector;
-    tmpVector.x = mpcc.inputPredict.coeffRef(0, 0);
-    tmpVector.y = mpcc.inputPredict.coeffRef(1, 0);
-    tmpVector.z = 0.0;
-    cmdMsg.acceleration = tmpVector;
-    cmdMsg.header.stamp = ros::Time::now();
-    rate.sleep();
-    cmd_pub.publish(cmdMsg);
-
-    nav_msgs::Path trajPred_msg;
-    trajPred_msg.header.frame_id = "world";
-    trajPred_msg.poses.resize(mpcc.horizon);
-    geometry_msgs::PoseStamped tmpPose;
-    for (int i = 0; i < mpcc.horizon; i++) {
-      tmpPose.pose.position.x = mpcc.statePredict.coeffRef(0, i);
-      tmpPose.pose.position.y = mpcc.statePredict.coeffRef(2, i);
-      tmpPose.pose.position.z = 0.0;
-      trajPred_msg.poses[i] = tmpPose;
+    // 检查是否在走廊范围内
+    bool in_corridor_range = mpcc.InCorridorRange(map, state.coeffRef(0, 0), state.coeffRef(2, 0));
+    if (!in_corridor_range) {
+      // 不在范围内立即停用mpcc
+      mpcc.mpcc_valid_flag_ = false;
+    } else {
+      // 在范围内, 如果离参考线不远, 启用mpcc
+      // 一旦启用，只有出范围才会关掉
+      auto pos_theta = resample.spline.getPostion(state.coeffRef(4, 0));
+      bool long_dist_with_refer_flag = std::sqrt(std::pow(pos_theta(0) - state.coeffRef(0, 0), 2)
+        + std::pow(pos_theta(1) - state.coeffRef(2, 0), 2)) > config.mpcc_valid_dist;
+      if (!mpcc.mpcc_valid_flag_ && !long_dist_with_refer_flag) {
+        mpcc.mpcc_valid_flag_ = true;
+      }
     }
-    predict_pub.publish(trajPred_msg);
 
-    nav_msgs::Path theta_trajPred_msg;
-    theta_trajPred_msg.header.frame_id = "world";
-    theta_trajPred_msg.poses.resize(mpcc.horizon);
-    for (int i = 0; i < mpcc.horizon; i++) {
-      auto pos_theta = resample.spline.getPostion(mpcc.statePredict.coeffRef(4, i));
-      tmpPose.pose.position.x = pos_theta(0);
-      tmpPose.pose.position.y = pos_theta(1);
-      tmpPose.pose.position.z = 0.0;
-      theta_trajPred_msg.poses[i] = tmpPose;
+    if (mpcc.mpcc_valid_flag_) {
+      mpcc.SolveQp(resample, map, config, state);
     }
-    theta_predict_pub.publish(theta_trajPred_msg);
+    publish_topic(mpcc, resample);
   }
   return 0;
 }
@@ -182,22 +190,113 @@ void odom_callback(const nav_msgs::Odometry& odom){
   state.coeffRef(2, 0) = odom.pose.pose.position.y;
   state.coeffRef(3, 0) = odom.twist.twist.linear.y;
 }
-// void mpc_callback(const ros::TimerEvent& event){
-  // refTraj_msg.header.frame_id = "world";
-  // geometry_msgs::PoseStamped tmpPose;
-  // double theta = 0;
-  // for (i = 0; i < resample.path_data_.size(); i++) {
-  //   tmpPose.pose.position.x = resample.path_data_.x(i);
-  //   tmpPose.pose.position.y = resample.path_data_.y(i);
-  //   tmpPose.pose.position.z = 0.0;
-  //   refTraj_msg.poses.push_back(tmpPose);
-  // }
-  // ros::Timer timer_mpc = nodeHandle.createTimer(ros::Duration(mpcT), mpc_callback);
-    
-  // refer_pub.publish(simSolver.displayPtr->refTraj_msg);
-//     global_pub.publish(simSolver.displayPtr->theta_msg);
-//     drone_pub.publish(simSolver.displayPtr->drone_msg);
-//     vis_polytope_pub.publish(simSolver.displayPtr->corridor_array_msg);
-//     simSolver.displayPtr->pubTunnels(flight_tunnel_pub);
-//     predict_pub.publish(simSolver.displayPtr->trajPred_msg);
-// }
+
+void publish_topic(Mpcc& mpcc, const Resample& resample) {
+  // mpcc无效时，向state的theta点走
+  if (mpcc.mpcc_valid_flag_) {
+    // 控制指令
+    tmpPoint.x = mpcc.stage[0].state[0];
+    tmpPoint.y = mpcc.stage[0].state[2];
+    tmpPoint.z = 0.0;
+    cmdMsg.position = tmpPoint;
+    tmpVector.x = mpcc.stage[0].state[1];
+    tmpVector.y = mpcc.stage[0].state[3];
+    tmpVector.z = 0.0;
+    cmdMsg.velocity = tmpVector;
+    tmpVector.x = mpcc.inputPredict.coeffRef(0, 0);
+    tmpVector.y = mpcc.inputPredict.coeffRef(1, 0);
+    tmpVector.z = 0.0;
+    cmdMsg.acceleration = tmpVector;
+    cmdMsg.header.stamp = ros::Time::now();
+    cmd_pub.publish(cmdMsg);
+
+    // rviz 预测轨迹
+    trajPred_msg.poses.resize(mpcc.horizon);
+    for (int i = 0; i < mpcc.horizon; i++) {
+      tmpPose.pose.position.x = mpcc.statePredict.coeffRef(0, i);
+      tmpPose.pose.position.y = mpcc.statePredict.coeffRef(2, i);
+      tmpPose.pose.position.z = 0.0;
+      trajPred_msg.poses[i] = tmpPose;
+    }
+    predict_pub.publish(trajPred_msg);
+
+    // rviz theta预测轨迹
+    theta_trajPred_msg.poses.resize(mpcc.horizon);
+    for (int i = 0; i < mpcc.horizon; i++) {
+      auto pos_theta = resample.spline.getPostion(mpcc.statePredict.coeffRef(4, i));
+      tmpPose.pose.position.x = pos_theta(0);
+      tmpPose.pose.position.y = pos_theta(1);
+      tmpPose.pose.position.z = 0.0;
+      theta_trajPred_msg.poses[i] = tmpPose;
+    }
+    theta_predict_pub.publish(theta_trajPred_msg);
+
+    // rviz 无人机箭头
+    drone_msg.points.clear();
+    pt.x = state.coeffRef(0,0);
+    pt.y = state.coeffRef(2,0);
+    pt.z = 0.0;
+    drone_msg.points.push_back(pt);
+    pt.x += state.coeffRef(1,0) / 2.0;
+    pt.y += state.coeffRef(3,0) / 2.0;
+    pt.z += 0.0;
+    drone_msg.points.push_back(pt);
+    drone_pub.publish(drone_msg);
+
+    // rviz theta箭头
+    theta_msg.points.clear();
+    auto pos = resample.spline.getPostion(state.coeffRef(4,0));
+    pt.x = pos(0);
+    pt.y = pos(1);
+    pt.z = 0.0;
+    theta_msg.points.push_back(pt);
+    auto vel = resample.spline.getDerivative(state.coeffRef(4,0));
+    pt.x += vel(0);
+    pt.y += vel(1);
+    pt.z += 0.0;
+    theta_msg.points.push_back(pt);
+    theta_pub.publish(theta_msg);
+  } else {
+    // 控制指令
+    auto pos_theta = resample.spline.getPostion(state.coeffRef(4, 0));
+    tmpPoint.x = pos_theta(0);
+    tmpPoint.y = pos_theta(1);
+    tmpPoint.z = 0.0;
+    cmdMsg.position = tmpPoint;
+    tmpVector.x = 0.0;
+    tmpVector.y = 0.0;
+    tmpVector.z = 0.0;
+    cmdMsg.velocity = tmpVector;
+    tmpVector.x = 0.0;
+    tmpVector.y = 0.0;
+    tmpVector.z = 0.0;
+    cmdMsg.acceleration = tmpVector;
+    cmdMsg.header.stamp = ros::Time::now();
+    cmd_pub.publish(cmdMsg);
+
+    // rviz 无人机箭头
+    drone_msg.points.clear();
+    pt.x = state.coeffRef(0,0);
+    pt.y = state.coeffRef(2,0);
+    pt.z = 0.0;
+    drone_msg.points.push_back(pt);
+    pt.x += state.coeffRef(1,0) / 2.0;
+    pt.y += state.coeffRef(3,0) / 2.0;
+    pt.z += 0.0;
+    drone_msg.points.push_back(pt);
+    drone_pub.publish(drone_msg);
+
+    // rviz theta箭头
+    theta_msg.points.clear();
+    pt.x = state.coeffRef(0,0);
+    pt.y = state.coeffRef(2,0);
+    pt.z = 0.0;
+    theta_msg.points.push_back(pt);
+    auto vel = resample.spline.getDerivative(state.coeffRef(4,0));
+    pt.x = pos_theta(0);
+    pt.y = pos_theta(1);
+    pt.z = 0.0;
+    theta_msg.points.push_back(pt);
+    theta_pub.publish(theta_msg);
+  }
+}

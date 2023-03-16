@@ -32,6 +32,7 @@
   <node pkg="mpcc_solver" name="mpcc_node" type="mpcc_node" output="screen">
     <remap from="~odom" to="odom"/>
     <remap from="~position_cmd" to="position_cmd"/>
+    <rosparam command="load" file="$(find mpcc_solver)/config/mpcc.yaml" />
   </node>
 
 </group>

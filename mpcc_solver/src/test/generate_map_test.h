@@ -1,3 +1,6 @@
+// Copyright @2022 HITCSC. All rights reserved.
+// Authors: Hongxu Cao (chx19990218@qq.com)
+
 #include "map.h"
 #include <fstream>
 #include <iostream>

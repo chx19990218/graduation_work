@@ -349,7 +349,7 @@ Visualization Manager:
       Value: true
     - Class: rviz/Marker
       Enabled: true
-      Marker Topic: /drone0/global_pose
+      Marker Topic: /drone0/theta_pose
       Name: GlobalPose
       Namespaces:
         "": true

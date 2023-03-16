@@ -9,6 +9,7 @@
 #include "osqp_interface.h"
 #include "resample.h"
 #include "sparse_utils.h"
+#include "config.h"
 
 struct Stage {
   // x vx y vy theta
@@ -28,7 +29,7 @@ class Mpcc {
   int state_dim_ = 5;
   // ax ay az v_theta
   int control_dim_ = 3;
-  int horizon = 20;
+  int horizon = 30;
   bool init_status = true;
   double Ts = 0.02;
   double max_theta_;
@@ -77,17 +78,21 @@ class Mpcc {
   std::vector<double> right_border_x;
   std::vector<double> right_border_y;
 
+  bool mpcc_valid_flag_ = false;
+
   Mpcc();
   void Init(const Resample& referenceline, Eigen::SparseMatrix<double> state);
   void UpdateState(const Resample& referenceline, Eigen::SparseMatrix<double>& state);
-  void CalculateCost(const Resample& referenceline, Eigen::SparseMatrix<double> state);
+  void CalculateCost(const Resample& referenceline, const Config& config,
+    Eigen::SparseMatrix<double> state);
   void RecedeOneHorizon(const Resample& referenceline);
-  void SolveQp(const Resample& referenceline, const Map& map,
+  void SolveQp(const Resample& referenceline, const Map& map, const Config& config,
     Eigen::SparseMatrix<double> state);
   int GetStage(const Map& map, double x, double y);
   bool InRec(std::vector<std::vector<double>>& rec, double x, double y);
+  bool InQuad(std::vector<std::vector<double>>& rec, double x, double y);
   void SetConstrains(const Resample& referenceline, const Map& map,
-    Eigen::SparseMatrix<double> state);
+    Eigen::SparseMatrix<double> state, const Config& config);
   std::vector<double> GetPointBorderConstrain(const Map& map, double x,
                                               double, const Resample& referenceline);
   std::vector<double> GetVerticalPoint(double x1, double y1, double x2,
@@ -99,10 +104,10 @@ class Mpcc {
                     std::vector<double>& error,
                     Eigen::SparseMatrix<double>& dEc,
                     Eigen::SparseMatrix<double>& dEl);
-  void chance_constrains_set(std::vector<double>& coeff,
-                                 std::vector<double> obst,
-                                 std::vector<double> ego);
+  void chance_constrains_set(std::vector<double>& coeff, std::vector<double> obst,
+      std::vector<double> ego, const Config& config);
   double normsinv(const double p);
   void UpdateResultForPlot(const Resample& referenceline,
       Eigen::SparseMatrix<double> state);
+  bool InCorridorRange(const Map& map, double x, double y);
 };

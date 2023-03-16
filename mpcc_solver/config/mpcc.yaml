@@ -1,0 +1,22 @@
+# constrains
+theta_dot_upper_limit : 5.0
+angle_upper_limit : 45.0
+
+# mpcc
+w_c : 1.0
+w_l : 10.0
+gamma : 20.0
+w_u : 0.01
+w_deltau : 0.001
+
+# reference line
+N_SPLINE : 5000
+
+
+mpcc_valid_dist : 0.3
+
+# obs penalty
+obs_penalty_valid : false
+Qobs : 0.01
+obs_x_r : 0.1
+obs_y_r : 0.1

@@ -4,11 +4,12 @@
 #include "map.h"
 #include "mpcc.h"
 #include "obstacle.h"
+#include "config.h"
 
 // TODO ：维度逐渐增加
 
 void Mpcc::SetConstrains(const Resample& referenceline, const Map& map,
-    Eigen::SparseMatrix<double> state) {
+    Eigen::SparseMatrix<double> state, const Config& config) {
   // 走廊边界限制
   Cx.resize(horizon, state_dim_ * horizon);
   xup.resize(horizon, 1);
@@ -27,12 +28,11 @@ void Mpcc::SetConstrains(const Resample& referenceline, const Map& map,
 
     Cx.coeffRef(i, i * state_dim_ + 0) = numer;
     Cx.coeffRef(i, i * state_dim_ + 2) = -denom;
-    // xup.coeffRef(i, 0) = dbmax;
-    // xlow.coeffRef(i, 0) = dbmin;
-    xup.coeffRef(i, 0) = 100000;
-    xlow.coeffRef(i, 0) = -100000;
+    xup.coeffRef(i, 0) = dbmax;
+    xlow.coeffRef(i, 0) = dbmin;
+  //   xup.coeffRef(i, 0) = 100000;
+  //   xlow.coeffRef(i, 0) = -100000;
   }
-  // std::cout << std::endl;
   // 速度限制
   // TODO
 
@@ -41,9 +41,9 @@ void Mpcc::SetConstrains(const Resample& referenceline, const Map& map,
   clow = xlow - Eigen::SparseMatrix<double>(Cx * AA * state);
 
   // 加速度/角度,里程速度限制限制
-  double max_attitude = 45.0 * PI / 180.0;
+  double max_attitude = config.angle_upper_limit * PI / 180.0;
   double max_a = 9.8 * std::tan(max_attitude);
-  double max_v = 3.0;
+  double max_v = config.theta_dot_upper_limit;
   for (int i = 0; i < horizon; i++) {
     // x轴控制量上限
     Eigen::SparseMatrix<double> Ck1(1, horizon * control_dim_);
@@ -190,7 +190,7 @@ int Mpcc::GetStage(const Map& map, double x, double y) {
   return -1;
 }
 
-// 按顺时针/逆时针传入
+// 按顺时针/逆时针传入 矩形
 bool Mpcc::InRec(std::vector<std::vector<double>>& rec, double x, double y) {
   // 在边上也算
   bool flag1 = ((rec[0][0] - x) * (rec[1][0] - rec[0][0]) +
@@ -202,4 +202,35 @@ bool Mpcc::InRec(std::vector<std::vector<double>>& rec, double x, double y) {
   bool flag4 = ((rec[3][0] - x) * (rec[0][0] - rec[3][0]) +
                 (rec[3][1] - y) * (rec[0][1] - rec[3][1])) <= 0;
   return flag1 & flag2 & flag3 & flag4;
+}
+
+// 按顺时针/逆时针传入 四边形
+bool Mpcc::InQuad(std::vector<std::vector<double>>& rec, double x, double y) {
+  double v1_x = rec[1][0] - rec[0][0];
+  double v2_x = rec[2][0] - rec[1][0];
+  double v3_x = rec[3][0] - rec[2][0];
+  double v4_x = rec[0][0] - rec[3][0];
+
+  double v1_y = rec[1][1] - rec[0][1];
+  double v2_y = rec[2][1] - rec[1][1];
+  double v3_y = rec[3][1] - rec[2][1];
+  double v4_y = rec[0][1] - rec[3][1];
+
+  double ego1_x = x - rec[0][0];
+  double ego2_x = x - rec[1][0];
+  double ego3_x = x - rec[2][0];
+  double ego4_x = x - rec[3][0];
+
+  double ego1_y = y - rec[0][1];
+  double ego2_y = y - rec[1][1];
+  double ego3_y = y - rec[2][1];
+  double ego4_y = y - rec[3][1];
+  
+  double k1 = v1_x * ego1_y - v1_y * ego1_x;
+  double k2 = v2_x * ego2_y - v2_y * ego2_x;
+  double k3 = v3_x * ego3_y - v3_y * ego3_x;
+  double k4 = v4_x * ego4_y - v4_y * ego4_x;
+
+  return (k1 > 0 && k2 > 0 && k3 > 0 && k4 > 0)
+    || (k1 < 0 && k2 < 0 && k3 < 0 && k4 < 0);
 }

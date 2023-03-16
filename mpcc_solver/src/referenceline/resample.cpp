@@ -3,12 +3,12 @@
 
 #include "resample.h"
 
-void Resample::FitResample(const Smooth& smooth) {
+void Resample::FitResample(const Smooth& smooth, const Config& config) {
   auto vec_x = smooth.result_x;
   auto vec_y = smooth.result_y;
   Eigen::VectorXd X = Eigen::Map<Eigen::VectorXd, Eigen::Unaligned>(vec_x.data(), smooth.result_x.size());
   Eigen::VectorXd Y = Eigen::Map<Eigen::VectorXd, Eigen::Unaligned>(vec_y.data(), smooth.result_y.size());
-  spline.gen2DSpline(X, Y);
+  spline.gen2DSpline(X, Y, config);
 
   // 根据中心线向外拓展半径
   // std::vector<double> center_s(spline.path_data_.s.data(), spline.path_data_.s.data() + spline.path_data_.s.size());

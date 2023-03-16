@@ -97,13 +97,14 @@ void Mpcc::RecedeOneHorizon(const Resample& referenceline) {
   stage.emplace_back(new_stage);
 }
 
-void Mpcc::CalculateCost(const Resample& referenceline,
+void Mpcc::CalculateCost(const Resample& referenceline, const Config& config,
     Eigen::SparseMatrix<double> state) {
       //20 10 50
-  double Qc = 20.0;
-  double Ql = 10.0;
-  double gamma = 5.0;
-  double q_u = 0.01;
+  double w_c = config.w_c;
+  double w_l = config.w_l;
+  double gamma = config.gamma;
+  double w_u = config.w_u;
+  double w_deltau = config.w_deltau;
   // double gamma = 0.001;
   Eigen::SparseMatrix<double> Qn;
   Eigen::SparseMatrix<double> qn;
@@ -147,17 +148,18 @@ void Mpcc::CalculateCost(const Resample& referenceline,
       if (i == horizon - 1) {
         gain = 1.0;
       }
-      Qn = 2 * Eigen::SparseMatrix<double>(dEc.transpose()) * gain * Qc * dEc +
-           2 * Eigen::SparseMatrix<double>(dEl.transpose()) * gain * Ql * dEl;
+      Qn = 2 * Eigen::SparseMatrix<double>(dEc.transpose()) * gain * w_c * dEc +
+           2 * Eigen::SparseMatrix<double>(dEl.transpose()) * gain * w_l * dEl;
       Eigen::SparseMatrix<double> c = dEc * X;
       Eigen::SparseMatrix<double> l = dEl * X;
-      qn = 2 * gain * Qc * (error[0] - c.coeffRef(0, 0)) *
+      qn = 2 * gain * w_c * (error[0] - c.coeffRef(0, 0)) *
                Eigen::SparseMatrix<double>(dEc.transpose()) +
-           2 * gain * Ql * (error[1] - l.coeffRef(0, 0)) *
+           2 * gain * w_l * (error[1] - l.coeffRef(0, 0)) *
                Eigen::SparseMatrix<double>(dEl.transpose());
     }
-    bool chance_constrain_flag = false;
-    double Sobs = 0.01;
+    bool chance_constrain_flag = config.obs_penalty_valid;
+    double Sobs = config.Qobs;
+    
     double x0 = 0.5;
     double y0 = 3.0;
     
@@ -165,7 +167,7 @@ void Mpcc::CalculateCost(const Resample& referenceline,
       std::vector<double> obst{x0, y0};
       std::vector<double> ego{stage[i].state[0], stage[i].state[2]};
       std::vector<double> coeff(6, 0.0);
-      chance_constrains_set(coeff, obst, ego);
+      chance_constrains_set(coeff, obst, ego, config);
 
       double g11 = coeff[0];
       double g12 = coeff[1];
@@ -189,11 +191,21 @@ void Mpcc::CalculateCost(const Resample& referenceline,
     sp::colMajor::setBlock(q, qn, state_dim_ * i, 0);
   }
 
+  Eigen::MatrixXd Q_deltau = 2.0 * Eigen::MatrixXd::Identity(control_dim_ * horizon, control_dim_ * horizon);
+  Q_deltau.coeffRef(0, 0) = 1.0;
+  Q_deltau.coeffRef(1, 1) = 1.0;
+  Q_deltau.coeffRef(control_dim_ * horizon - 2, control_dim_ * horizon - 2) = 1.0;
+  Q_deltau.coeffRef(control_dim_ * horizon - 1, control_dim_ * horizon - 1) = 1.0;
+  for (int i = 0; i < control_dim_ * horizon - 2; i++) {
+    Q_deltau.coeffRef(i, i + 2) = -2.0;
+  }
+
   Eigen::SparseMatrix<double> progress(control_dim_ * horizon, 1);
   for (int i = 0; i < horizon; i++) {
     progress.coeffRef(control_dim_ * i + control_dim_ - 1, 0) = gamma * Ts;
   }
-  H = BBT * Q * BB  + q_u * Eigen::MatrixXd::Identity(control_dim_ * horizon, control_dim_ * horizon);
+  H = BBT * Q * BB  + w_deltau * Q_deltau
+    + w_u * Eigen::MatrixXd::Identity(control_dim_ * horizon, control_dim_ * horizon);
   f = BBT * Q * AA * state + BBT * q - progress;
 }
 
@@ -274,12 +286,12 @@ void Mpcc::GetErrorInfo(const Resample& referenceline, const Stage& stage,
   dEl.coeffRef(0, state_dim_ - 1) = lag_error__theta;
 }
 
-void Mpcc::SolveQp(const Resample& referenceline, const Map& map,
+void Mpcc::SolveQp(const Resample& referenceline, const Map& map, const Config& config,
     Eigen::SparseMatrix<double> state) {
   RecedeOneHorizon(referenceline);
 
-  SetConstrains(referenceline, map, state);
-  CalculateCost(referenceline, state);
+  SetConstrains(referenceline, map, state, config);
+  CalculateCost(referenceline, config, state);
 
 
   osqpInterface.updateMatrices(H, f, A, b, C, clow, cupp, ul, uu);
@@ -331,4 +343,19 @@ void Mpcc::UpdateResultForPlot(const Resample& referenceline,
   // history
   x_history.emplace_back(state.coeffRef(0, 0));
   y_history.emplace_back(state.coeffRef(2, 0));
+}
+
+bool Mpcc::InCorridorRange(const Map& map, double x, double y) {
+  for (int i = 0; i < map.outer_point_x_.size() - 1; i++) {
+    std::vector<std::vector<double>> rec{
+      {map.outer_point_x_[i], map.outer_point_y_[i]},
+      {map.outer_point_x_[i + 1], map.outer_point_y_[i + 1]},
+      {map.inner_point_x_[i + 1], map.inner_point_y_[i + 1]},
+      {map.inner_point_x_[i], map.inner_point_y_[i]}
+    };
+    if (InQuad(rec, x, y)) {
+      return true;
+    }
+  }
+  return false;
 }

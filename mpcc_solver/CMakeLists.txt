@@ -31,6 +31,7 @@ include_directories(
   src/plot
   src/obstacle
   src/test
+  src/config
   /usr/local/include/osqp
 )
 add_executable(mpcc_node 
@@ -47,7 +48,6 @@ add_executable(mpcc_node
   src/referenceline/search.cpp
   src/referenceline/smooth.cpp
   src/referenceline/resample.cpp
-  # src/test/generate_map_test.cpp
 )
 
 target_link_libraries(mpcc_node ${PYTHON_LIBRARIES})
