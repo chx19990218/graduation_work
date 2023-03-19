@@ -1,5 +1,5 @@
 init_x: 0.5
-init_y: 0.6
+init_y: 2.0
 init_z: 0.0
 init_yaw: 0.0
 simulation_rate: 1000

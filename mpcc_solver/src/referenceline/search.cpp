@@ -156,8 +156,8 @@ void Search::SphereSearch(const Map& map) {
   double now_x = 0.5, now_y = 0.5;
   double start_x = now_x;
   double start_y = now_y;
-  // result_x.emplace_back(start_x);
-  // result_y.emplace_back(start_y);
+  result_x.emplace_back(start_x);
+  result_y.emplace_back(start_y);
   // 设置搜索方向
   Eigen::Vector2d search_direction(0.0, 1.0);
 
@@ -183,8 +183,8 @@ void Search::SphereSearch(const Map& map) {
     result_x.emplace_back(now_x);
     result_y.emplace_back(now_y);
   }
-  // result_x.emplace_back(start_x);
-  // result_y.emplace_back(start_y);
+  result_x.emplace_back(start_x);
+  result_y.emplace_back(start_y);
 }
 
 void Search::ReviseSearchDirection(double& now_x, double& now_y,
@@ -226,7 +226,7 @@ void Search::SphereSample(double now_x, double now_y, double r,
                           const Eigen::Vector2d& search_direction,
                           std::vector<std::vector<double>>& sample_result) {
   sample_result.clear();
-  double deg_interval = 30.0 / 180.0 * PI;
+  double deg_interval = 5.0 / 180.0 * PI;
   // 把两边排除
   int sample_num = static_cast<int>(PI / 2.0 / deg_interval - 1.0);
   double sample_x, sample_y;

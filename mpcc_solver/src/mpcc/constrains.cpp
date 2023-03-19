@@ -20,7 +20,6 @@ void Mpcc::SetConstrains(const Resample& referenceline, const Map& map,
     double y = stage[i].state[2];
     std::vector<double> border = GetPointBorderConstrain(map, x, y, referenceline);
     // std::cout << border[0] << "," << border[1] << "," << border[2] << "," << border[3] << std::endl;
-    
     double numer = -(border[0] - border[2]);
     double denom = (border[1] - border[3]);
     double dbmax = std::max(numer * border[0] - denom * border[1], numer * border[2] - denom * border[3]);
@@ -30,8 +29,8 @@ void Mpcc::SetConstrains(const Resample& referenceline, const Map& map,
     Cx.coeffRef(i, i * state_dim_ + 2) = -denom;
     xup.coeffRef(i, 0) = dbmax;
     xlow.coeffRef(i, 0) = dbmin;
-  //   xup.coeffRef(i, 0) = 100000;
-  //   xlow.coeffRef(i, 0) = -100000;
+    // xup.coeffRef(i, 0) = 100000;
+    // xlow.coeffRef(i, 0) = -100000;
   }
   // 速度限制
   // TODO
@@ -83,7 +82,6 @@ void Mpcc::SetConstrains(const Resample& referenceline, const Map& map,
 std::vector<double> Mpcc::GetPointBorderConstrain(const Map& map, double x,
                                                   double y, const Resample& referenceline) {
   int stage_index = GetStage(map, x, y);
-
   std::vector<double> res(4);
   if (stage_index >= 0) {
     // // 进入障碍区，后续更新进入条件
@@ -93,33 +91,33 @@ std::vector<double> Mpcc::GetPointBorderConstrain(const Map& map, double x,
       
     // } else { // 没进入障碍区
       // 直接用参考线向两侧拓展一个半径
-      double s = referenceline.spline.porjectOnSpline(x, y);
-      auto center_p = referenceline.spline.getPostion(s);
-      auto center_v = referenceline.spline.getDerivative(s);
-      double r = 0.5;
-      double x_outer = center_p(0) + r * (-center_v(1));
-      double y_outer = center_p(1) + r * (center_v(0));
-      double x_inner = center_p(0) + r * (center_v(1));
-      double y_inner = center_p(1) + r * (-center_v(0));
-      res[0] = x_outer;
-      res[1] = y_outer;
-      res[2] = x_inner;
-      res[3] = y_inner;
+      // double s = referenceline.spline.porjectOnSpline(x, y);
+      // auto center_p = referenceline.spline.getPostion(s);
+      // auto center_v = referenceline.spline.getDerivative(s);
+      // double r = 0.5;
+      // double x_outer = center_p(0) + r * (-center_v(1));
+      // double y_outer = center_p(1) + r * (center_v(0));
+      // double x_inner = center_p(0) + r * (center_v(1));
+      // double y_inner = center_p(1) + r * (-center_v(0));
+      // res[0] = x_outer;
+      // res[1] = y_outer;
+      // res[2] = x_inner;
+      // res[3] = y_inner;
       // 向直角转弯的走廊边界作垂线获得边界
-      // double x1 = map.outer_point_x_[stage_index];
-      // double y1 = map.outer_point_y_[stage_index];
-      // double x2 = map.outer_point_x_[stage_index + 1];
-      // double y2 = map.outer_point_y_[stage_index + 1];
-      // std::vector<double> outer_vertical_point = GetVerticalPoint(x1, y1, x2, y2, x, y);
-      // res[0] = outer_vertical_point[0];
-      // res[1] = outer_vertical_point[1];
-      // x1 = map.inner_point_x_[stage_index];
-      // y1 = map.inner_point_y_[stage_index];
-      // x2 = map.inner_point_x_[stage_index + 1];
-      // y2 = map.inner_point_y_[stage_index + 1];
-      // std::vector<double> inner_vertical_point = GetVerticalPoint(x1, y1, x2, y2, x, y);
-      // res[2] = inner_vertical_point[0];
-      // res[3] = inner_vertical_point[1];
+      double x1 = map.outer_point_x_[stage_index];
+      double y1 = map.outer_point_y_[stage_index];
+      double x2 = map.outer_point_x_[stage_index + 1];
+      double y2 = map.outer_point_y_[stage_index + 1];
+      std::vector<double> outer_vertical_point = GetVerticalPoint(x1, y1, x2, y2, x, y);
+      res[0] = outer_vertical_point[0];
+      res[1] = outer_vertical_point[1];
+      x1 = map.inner_point_x_[stage_index];
+      y1 = map.inner_point_y_[stage_index];
+      x2 = map.inner_point_x_[stage_index + 1];
+      y2 = map.inner_point_y_[stage_index + 1];
+      std::vector<double> inner_vertical_point = GetVerticalPoint(x1, y1, x2, y2, x, y);
+      res[2] = inner_vertical_point[0];
+      res[3] = inner_vertical_point[1];
     // }
   }
   return res;

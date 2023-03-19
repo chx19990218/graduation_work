@@ -76,9 +76,9 @@ bool CubicSpline::compSplineParams() {
   mu(0) = 0.0;
   z(0) = 0.0;
   for (int i = 1; i<spline_data_.n_points-1; i++) {
-      l(i) = 2.0*(spline_data_.x_data(i+1) - spline_data_.x_data(i-1)) - h(i-1)*mu(i-1);
-      mu(i) = h(i)/l(i);
-      z(i) = (alpha(i) - h(i-1)*z(i-1))/l(i);
+    l(i) = 2.0*(spline_data_.x_data(i+1) - spline_data_.x_data(i-1)) - h(i-1)*mu(i-1);
+    mu(i) = h(i)/l(i);
+    z(i) = (alpha(i) - h(i-1)*z(i-1))/l(i);
   }
   l(spline_data_.n_points-1) = 1.0;
   z(spline_data_.n_points-1) = 0.0;

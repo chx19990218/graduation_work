@@ -218,7 +218,7 @@ Eigen::Vector2d ArcLengthSpline::getDerivative(const double s) const {
   Eigen::Vector2d ds_path;
   ds_path(0) = spline_x_.getDerivative(s);
   ds_path(1) = spline_y_.getDerivative(s);
-
+  
   return ds_path;
 }
 

@@ -60,7 +60,7 @@ void Plot::plot(const Map& map, const Search& search, const Smooth& smooth,
   Option option8(color_map[Blue], line_map[Seven]);
   plt::named_plot("horizon", mpcc.x_horizon, mpcc.y_horizon, option8.color_ + option8.line_);
 
-  // state and theta
+  // theta horizon
   Option option9(color_map[Red], line_map[Seven]);
   plt::plot(mpcc.theta_x_, mpcc.theta_y_, option9.color_ + option9.line_);
 

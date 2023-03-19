@@ -18,6 +18,9 @@ class Config {
   double obs_x_r;
   double obs_y_r;
   double Qobs;
+  double end_gain_rate;
+  double obs_x;
+  double obs_y;
   int N_SPLINE;
   bool obs_penalty_valid;
 
@@ -35,5 +38,8 @@ class Config {
     nh.getParam("Qobs", Qobs);
     nh.getParam("obs_penalty_valid", obs_penalty_valid);
     nh.getParam("w_deltau", w_deltau);
+    nh.getParam("end_gain_rate", end_gain_rate);
+    nh.getParam("obs_x", obs_x);
+    nh.getParam("obs_y", obs_y);
   }
 };

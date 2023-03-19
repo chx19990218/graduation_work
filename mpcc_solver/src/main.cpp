@@ -125,8 +125,9 @@ int main(int argc, char** argv) {
   
   
   // int cnt = 1;
+  ros::spinOnce();
   mpcc.UpdateState(resample, state);
-  mpcc.Init(resample, state);
+  mpcc.Init(resample, state, config);
   // for (int i = 0; i < cnt; i++) { 
   //   if (i % 10 == 0){
   //     std::cout<<"sim times:"<<i<<std::endl;
@@ -147,8 +148,6 @@ int main(int argc, char** argv) {
   // }
   
   
-
-  // plot.plot(map, search, smooth, resample, mpcc, obstacle);
 
 
 
@@ -175,8 +174,11 @@ int main(int argc, char** argv) {
     if (mpcc.mpcc_valid_flag_) {
       mpcc.SolveQp(resample, map, config, state);
     }
+    mpcc.x_history.emplace_back(state.coeffRef(0, 0));
+    mpcc.y_history.emplace_back(state.coeffRef(2, 0));
     publish_topic(mpcc, resample);
   }
+  plot.plot(map, search, smooth, resample, mpcc, obstacle);
   return 0;
 }
 
@@ -226,7 +228,7 @@ void publish_topic(Mpcc& mpcc, const Resample& resample) {
       auto pos_theta = resample.spline.getPostion(mpcc.statePredict.coeffRef(4, i));
       tmpPose.pose.position.x = pos_theta(0);
       tmpPose.pose.position.y = pos_theta(1);
-      tmpPose.pose.position.z = 0.0;
+      tmpPose.pose.position.z = 0.1;
       theta_trajPred_msg.poses[i] = tmpPose;
     }
     theta_predict_pub.publish(theta_trajPred_msg);
@@ -251,6 +253,8 @@ void publish_topic(Mpcc& mpcc, const Resample& resample) {
     pt.z = 0.0;
     theta_msg.points.push_back(pt);
     auto vel = resample.spline.getDerivative(state.coeffRef(4,0));
+    vel(0) /= sqrt(vel(0) * vel(0) + vel(1) * vel(1));
+    vel(1) /= sqrt(vel(0) * vel(0) + vel(1) * vel(1));
     pt.x += vel(0);
     pt.y += vel(1);
     pt.z += 0.0;

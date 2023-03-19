@@ -50,15 +50,17 @@ Mpcc::Mpcc() {
   statePredict.resize(state_dim_, horizon);
 }
 
-void Mpcc::Init(const Resample& referenceline, Eigen::SparseMatrix<double> state) {
+void Mpcc::Init(const Resample& referenceline, Eigen::SparseMatrix<double> state,
+    const Config& config) {
   max_theta_ = referenceline.spline.getLength(); 
   optimal_theta.clear();
+  stage.clear();
   // 初速度为0,初始轨迹为匀加速
-  double v = 1.0;
+  double v = 0.8 * config.theta_dot_upper_limit;
   double a = v / (Ts * horizon);
   double x, y, theta;
   for (int i = 0; i < horizon; i++) {
-    theta = state.coeffRef(state_dim_ - 1, 0) + a * i * i * Ts * Ts / 2;
+    theta = std::fmod(state.coeffRef(state_dim_ - 1, 0) + a * i * i * Ts * Ts / 2, max_theta_);
     auto pos_xy = referenceline.spline.getPostion(theta);
     auto dpos_xy = referenceline.spline.getDerivative(theta);
     double phi = atan2(dpos_xy(1), dpos_xy(0));
@@ -77,24 +79,43 @@ void Mpcc::UpdateState(const Resample& referenceline,
   double now_x = state.coeffRef(0, 0);
   double now_y = state.coeffRef(2, 0);
   double now_theta = referenceline.spline.porjectOnSpline(now_x, now_y);
+  // state 与 optimal_theta要一致
+  if (now_theta - optimal_theta[0] > 4.0 * max_theta_ / 5.0) {
+    now_theta -= max_theta_;
+  }
+  if (optimal_theta[0] - now_theta > 4.0 * max_theta_ / 5.0) {
+    now_theta += max_theta_;
+  }
   state.coeffRef(state_dim_ - 1, 0) = now_theta;
 }
 
 void Mpcc::RecedeOneHorizon(const Resample& referenceline) {
+  // 修复在交界处theta优化错误的问题，如果回到开始，recede会出现错误
   optimal_theta.emplace_back(std::fmod(
-      2 * optimal_theta.back() - optimal_theta.rbegin()[1], max_theta_));
+    2 * (optimal_theta.back() + max_theta_) - optimal_theta.rbegin()[1], max_theta_));
   optimal_theta.erase(optimal_theta.begin());
+  for (int i = 0; i < horizon - 1; i++) {
+    if (optimal_theta[i + 1] - optimal_theta[i] + max_theta_ < 5.0) {
+      optimal_theta[i + 1] += max_theta_;
+    }
+  }
 
   double x = 2 * stage.back().state[0] - stage.rbegin()[1].state[0];
   double y = 2 * stage.back().state[2] - stage.rbegin()[1].state[2];
 
-  std::vector<double> new_state = stage.back().state;
-  new_state[0] = x;
-  new_state[2] = y;
-  new_state[4] = optimal_theta.back();
+  std::vector<double> new_state{x, stage.back().state[1], y, stage.back().state[3], optimal_theta.back()};
+
   Stage new_stage(new_state);
-  stage.erase(stage.begin());
-  stage.emplace_back(new_stage);
+
+  for (int i = 0; i < horizon - 1; i++) {
+    stage[i] = stage[i + 1];
+  }
+  stage[horizon - 1] = new_stage;
+  for (int i = 0;i<horizon;i++){
+    // std::cout <<"scscsc:" << optimal_theta[i] << std::endl;
+  }
+  // std::cout <<optimal_theta[horizon - 1] << "," << stage[horizon - 1].state[4] << std::endl;
+  // std::cout << std::endl;
 }
 
 void Mpcc::CalculateCost(const Resample& referenceline, const Config& config,
@@ -110,7 +131,7 @@ void Mpcc::CalculateCost(const Resample& referenceline, const Config& config,
   Eigen::SparseMatrix<double> qn;
   for (int i = 0; i < horizon; i++) {
     if (false) {
-      double theta = optimal_theta[i];  // TODO 考虑闭环，theta跑一圈
+      double theta = std::fmod(optimal_theta[i], max_theta_);  // TODO 考虑闭环，theta跑一圈
       auto pos_xy = referenceline.spline.getPostion(theta);
       auto vel_xy = referenceline.spline.getDerivative(theta);
       double x = pos_xy[0];
@@ -136,34 +157,56 @@ void Mpcc::CalculateCost(const Resample& referenceline, const Config& config,
       qn = -2 * r_x * grad_x - 2 * r_y * grad_y;
     } else {
       Eigen::SparseMatrix<double> X(state_dim_, 1);
+      // 这里theta如果fmod就会优化出错，保证递增，在recede把这个修掉了
       for (int j = 0; j < state_dim_; j++) {
         X.coeffRef(j, 0) = stage[i].state[j];
       }
-      
+      // stage的theta经过recede不知道在哪里又被改了 TODO
+      X.coeffRef(4, 0) = optimal_theta[i];
       std::vector<double> error(2, 0.0);
       Eigen::SparseMatrix<double> dEc(1, state_dim_);
       Eigen::SparseMatrix<double> dEl(1, state_dim_);
       GetErrorInfo(referenceline, stage[i], error, dEc, dEl);
+
       double gain = 1.0;
       if (i == horizon - 1) {
-        gain = 1.0;
+        gain = config.end_gain_rate;
       }
-      Qn = 2 * Eigen::SparseMatrix<double>(dEc.transpose()) * gain * w_c * dEc +
+      double w_c_gain = 1.0;
+      // 根据kappa调整横向系数提高安全性
+      if (i > 0 && i < horizon - 1) {
+        std::vector<std::vector<double>> points{{stage[i - 1].state[0], stage[i - 1].state[2]},
+                                                {stage[i].state[0], stage[i].state[2]},
+                                                {stage[i + 1].state[0], stage[i + 1].state[2]}};
+        double kappa = GetKappa(points);
+        double kappa_lower_limit = 2.0;
+        double kappa_upper_limit = 4.0;
+        double w_c_gain_upper = 2.0;
+        double w_c_gain_lower = 1.0;
+        
+        if (kappa >= kappa_lower_limit && kappa < kappa_upper_limit) {
+          w_c_gain = (kappa - kappa_lower_limit) * (w_c_gain_upper - w_c_gain_lower)
+            / (kappa_upper_limit - kappa_lower_limit) + w_c_gain_lower;
+        } else if (kappa >= kappa_upper_limit) {
+          w_c_gain = w_c_gain_upper;
+        }
+        // std::cout << kappa << "," << w_c_gain << std::endl;
+      }
+      Qn = 2 * Eigen::SparseMatrix<double>(dEc.transpose()) * w_c_gain * gain * w_c * dEc +
            2 * Eigen::SparseMatrix<double>(dEl.transpose()) * gain * w_l * dEl;
       Eigen::SparseMatrix<double> c = dEc * X;
       Eigen::SparseMatrix<double> l = dEl * X;
-      qn = 2 * gain * w_c * (error[0] - c.coeffRef(0, 0)) *
+      // std::cout << "err:" << X.coeffRef(4, 0) << std::endl;
+      qn = 2 * gain * w_c_gain * w_c * (error[0] - c.coeffRef(0, 0)) *
                Eigen::SparseMatrix<double>(dEc.transpose()) +
            2 * gain * w_l * (error[1] - l.coeffRef(0, 0)) *
                Eigen::SparseMatrix<double>(dEl.transpose());
     }
-    bool chance_constrain_flag = config.obs_penalty_valid;
+    // obs penalty
     double Sobs = config.Qobs;
-    
-    double x0 = 0.5;
-    double y0 = 3.0;
-    
-    if (chance_constrain_flag) {
+    double x0 = config.obs_x;
+    double y0 = config.obs_y;
+    if (config.obs_penalty_valid) {
       std::vector<double> obst{x0, y0};
       std::vector<double> ego{stage[i].state[0], stage[i].state[2]};
       std::vector<double> coeff(6, 0.0);
@@ -289,10 +332,10 @@ void Mpcc::GetErrorInfo(const Resample& referenceline, const Stage& stage,
 void Mpcc::SolveQp(const Resample& referenceline, const Map& map, const Config& config,
     Eigen::SparseMatrix<double> state) {
   RecedeOneHorizon(referenceline);
-
+  
   SetConstrains(referenceline, map, state, config);
+  
   CalculateCost(referenceline, config, state);
-
 
   osqpInterface.updateMatrices(H, f, A, b, C, clow, cupp, ul, uu);
   osqpInterface.solveQP();
@@ -302,6 +345,10 @@ void Mpcc::SolveQp(const Resample& referenceline, const Map& map, const Config& 
 
   if (solveStatus == OSQP_SOLVED) {
     optimal_theta.clear();
+    x_horizon.clear();
+    y_horizon.clear();
+    theta_x_.clear();
+    theta_y_.clear();
     Eigen::SparseMatrix<double> state_horizon = state;
     for (int i = 0; i < horizon; i++) {
       for (int j = 0; j < control_dim_; j++) {
@@ -309,6 +356,8 @@ void Mpcc::SolveQp(const Resample& referenceline, const Map& map, const Config& 
       }
       // 计算对应优化状态
       state_horizon = Ad * state_horizon + Bd * inputPredict.col(i);
+      // std::cout << "asasas: " << state_horizon.coeffRef(state_dim_ - 1, 0) << "," << inputPredict.coeffRef(2, i) << std::endl;
+      state_horizon.coeffRef(state_dim_ - 1, 0) = std::fmod(state_horizon.coeffRef(state_dim_ - 1, 0), max_theta_);
       sp::colMajor::setCols(statePredict, state_horizon, i);
 
       // 更新最优轨迹
@@ -316,10 +365,18 @@ void Mpcc::SolveQp(const Resample& referenceline, const Map& map, const Config& 
       for (int j = 0; j < state_dim_; j++) {
         stage[i].state[j] = state_horizon.coeffRef(j, 0);
       }
+
+      // update for plot
+      x_horizon.emplace_back(statePredict.coeffRef(0, i));
+      y_horizon.emplace_back(statePredict.coeffRef(2, i));
+      auto pos = referenceline.spline.getPostion(statePredict.coeffRef(4, i));
+      theta_x_.emplace_back(pos(0));
+      theta_y_.emplace_back(pos(1));
     }
   } else {
     std::cout << "no solution" << std::endl;
   }
+  std::cout << std::endl;
 }
 
 void Mpcc::UpdateResultForPlot(const Resample& referenceline,
@@ -358,4 +415,15 @@ bool Mpcc::InCorridorRange(const Map& map, double x, double y) {
     }
   }
   return false;
+}
+
+double Mpcc::GetKappa(std::vector<std::vector<double>> points) {
+  double a = sqrt(std::pow(points[0][0] - points[1][0], 2) + std::pow(points[0][1] - points[1][1], 2));
+  double b = sqrt(std::pow(points[1][0] - points[2][0], 2) + std::pow(points[1][1] - points[2][1], 2));
+  double c = sqrt(std::pow(points[2][0] - points[0][0], 2) + std::pow(points[2][1] - points[0][1], 2));
+  // 海伦公式
+  double p = (a + b + c) / 2.0;
+  double s = std::sqrt(p * (p - a) * (p - b) * (p - c));
+  double r = a * b * c / (4 * s);
+  return 1 / r;
 }

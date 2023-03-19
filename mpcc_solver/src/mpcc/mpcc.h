@@ -81,7 +81,8 @@ class Mpcc {
   bool mpcc_valid_flag_ = false;
 
   Mpcc();
-  void Init(const Resample& referenceline, Eigen::SparseMatrix<double> state);
+  void Init(const Resample& referenceline, Eigen::SparseMatrix<double> state,
+      const Config& config);
   void UpdateState(const Resample& referenceline, Eigen::SparseMatrix<double>& state);
   void CalculateCost(const Resample& referenceline, const Config& config,
     Eigen::SparseMatrix<double> state);
@@ -110,4 +111,5 @@ class Mpcc {
   void UpdateResultForPlot(const Resample& referenceline,
       Eigen::SparseMatrix<double> state);
   bool InCorridorRange(const Map& map, double x, double y);
+  double GetKappa(std::vector<std::vector<double>> points);
 };

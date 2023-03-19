@@ -1,8 +1,9 @@
 # constrains
 theta_dot_upper_limit : 5.0
-angle_upper_limit : 45.0
+angle_upper_limit : 45.0  # deg
 
 # mpcc
+end_gain_rate : 20.0 #ec, el param rate of end point 
 w_c : 1.0
 w_l : 10.0
 gamma : 20.0
@@ -18,5 +19,7 @@ mpcc_valid_dist : 0.3
 # obs penalty
 obs_penalty_valid : false
 Qobs : 0.01
+obs_x : 0.5
+obs_y : 3.0
 obs_x_r : 0.1
 obs_y_r : 0.1

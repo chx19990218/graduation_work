@@ -19,8 +19,8 @@ void Smooth::Fem(const Search& search) {
   // double w1 = 0.05;
   // double w2 = 0.5;
   // double w3 = 1.0;
-  double w1 = 0.0;
-  double w2 = 0.0;
+  double w1 = 0.05;
+  double w2 = 0.2;
   double w3 = 1.0;
   double w3_end = 2.0 * w3;
   matrix_a_similarity_ = w3 * Eigen::MatrixXd::Identity(2 * N, 2 * N);
