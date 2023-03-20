@@ -72,9 +72,9 @@ void Plot::plot(const Map& map, const Search& search, const Smooth& smooth,
   }
   plt::fill(x1, y1, {});
 
-  // // 动态规划最优轨迹
-  // Option option10(color_map[Cyan], line_map[Ten]);
-  // plt::plot(mpcc.optimal_path_x, mpcc.optimal_path_y, option10.color_ + option10.line_);
+  // 动态规划最优轨迹
+  Option option10(color_map[Cyan], line_map[Ten]);
+  plt::plot(mpcc.optimal_path_x, mpcc.optimal_path_y, option10.color_ + option10.line_);
 
   // 撒点
   Option option11(color_map[Green], line_map[Six]);

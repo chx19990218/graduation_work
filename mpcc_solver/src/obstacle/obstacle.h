@@ -9,6 +9,7 @@
 
 #include "mpcc.h"
 #include "resample.h"
+#include "config.h"
 
 class Obstacle {
  public:
@@ -22,8 +23,7 @@ class Obstacle {
   std::vector<std::vector<double>> grid_x_, grid_y_;
   std::vector<std::vector<bool>> occupied_flag_;
   std::vector<int> optimal_path = std::vector<int> (20, col_size / 2);
-  std::vector<std::vector<double>> obstacle_pos_{
-      {0.4, 2.5}, {0.6, 2.5}, {0.6, 3.5}, {0.4, 3.5}};
+  std::vector<std::vector<double>> obstacle_pos_;
   std::vector<std::vector<std::vector<double>>> optimal_cost =
       std::vector<std::vector<std::vector<double>>>(
           row_size, std::vector<std::vector<double>>(
@@ -34,7 +34,7 @@ class Obstacle {
                         col_size, std::vector<int>(col_size, 0)));
   
   void GenerateGridCoordinate(const Resample& referenceline, const Map& map,
-                              Mpcc& mpcc);
+                              Mpcc& mpcc, const Config& config);
   std::vector<double> GetIntersectionPoint(Eigen::Vector2d pos,
                                            std::vector<double> border_point1,
                                            std::vector<double> border_point2,
@@ -51,5 +51,5 @@ class Obstacle {
   void ExpandPath(Mpcc& mpcc);
   
   void Update(const Resample& referenceline, const Map& map,
-                      Mpcc& mpcc, Eigen::SparseMatrix<double> state);
+                      Mpcc& mpcc, Eigen::SparseMatrix<double> state, const Config& config);
 };

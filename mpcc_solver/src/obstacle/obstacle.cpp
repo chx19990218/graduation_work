@@ -4,28 +4,32 @@
 #include "obstacle.h"
 
 void Obstacle::Update(const Resample& referenceline, const Map& map,
-                      Mpcc& mpcc, Eigen::SparseMatrix<double> state) {
-  GenerateGridCoordinate(referenceline, map, mpcc);
+                      Mpcc& mpcc, Eigen::SparseMatrix<double> state, const Config& config) {
+  obstacle_pos_ = mpcc. obstacle_pos_;
+  GenerateGridCoordinate(referenceline, map, mpcc, config);
   DPForward(mpcc, referenceline, state);
   DPBackward(mpcc);
   ExpandPath(mpcc);
 }
 
 void Obstacle::GenerateGridCoordinate(const Resample& referenceline,
-                                      const Map& map, Mpcc& mpcc) {
-  double start_x = 0.5;
-  double start_y = 2.0;
-  double end_x = 0.5;
-  double end_y = 4.0;
-
-  double start_theta = referenceline.spline.porjectOnSpline(start_x, start_y);
+                                      const Map& map, Mpcc& mpcc, const Config& config) {
+  double obs_x = (obstacle_pos_[0][0] + obstacle_pos_[2][0]) / 2.0;
+  double obs_y = (obstacle_pos_[0][1] + obstacle_pos_[2][1]) / 2.0;
+  double obs_theta = referenceline.spline.porjectOnSpline(obs_x, obs_y);
+  double horizon_dist = mpcc.horizon * config.theta_dot_upper_limit * mpcc.Ts + 0.1;
+  // 用1/4 horizon_dist作为dp范围
+  double start_theta = std::max(obs_theta - horizon_dist / 4.0, 0.0);
+  double end_theta = obs_theta + horizon_dist / 4.0;
+  double interval = (end_theta - start_theta) / static_cast<double>(row_size);
+  // std::cout << start_theta << "," << obs_theta << "," << end_theta << std::endl;
 
   std::vector<double> border_point1, border_point2;
   grid_x_.clear();
   grid_y_.clear();
   occupied_flag_.clear();
   for (int i = 0; i < row_size; i++) {
-    double theta = start_theta + 0.1 * i;
+    double theta = start_theta + interval * i;
     Eigen::Vector2d pos = referenceline.spline.getPostion(theta);
     Eigen::Vector2d vec_v = referenceline.spline.getDerivative(theta);
     int stage_index = mpcc.GetStage(map, pos(0), pos(1));

@@ -75,8 +75,10 @@ int main(int argc, char** argv) {
   Plot plot;
   Config config(nh);
 
-  // test : 测试生成pcd地图
-  // GenerateMap();
+  // 生成pcd地图，覆盖掉原始pcd
+  if (config.generate_pcd_map_flag) {
+    GenerateMap(config, obstacle);
+  }
   
   // 1. gernerate map
   auto generate_map_start_time = ros::Time::now();
@@ -118,12 +120,10 @@ int main(int argc, char** argv) {
   }
   refer_pub.publish(refTraj_msg);
 
+  if (config.enable_dp_flag) {
+    obstacle.Update(resample, map, mpcc, state, config);
+  }
   
-
-  // obstacle.Update(resample, map, mpcc, state);
-  
-  
-  // int cnt = 1;
   ros::spinOnce();
   mpcc.UpdateState(resample, state);
   mpcc.Init(resample, state, config);

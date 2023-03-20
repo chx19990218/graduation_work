@@ -80,6 +80,8 @@ class Mpcc {
   std::vector<double> left_border_y;
   std::vector<double> right_border_x;
   std::vector<double> right_border_y;
+  std::vector<std::vector<double>> obstacle_pos_{
+      {-1.7, -1.2}, {-1.0, -1.2}, {-1.0, -1.0}, {-1.7, -1.0}};
 
   quadrotor_msgs::PositionCommand cmdMsg;
 
@@ -102,7 +104,7 @@ class Mpcc {
   void SetConstrains(const Resample& referenceline, const Map& map,
     Eigen::SparseMatrix<double> state, const Config& config);
   std::vector<double> GetPointBorderConstrain(const Map& map, double x,
-                                              double, const Resample& referenceline);
+                                              double, const Resample& referenceline, const Config& config);
   std::vector<double> GetVerticalPoint(double x1, double y1, double x2,
                                        double y2, double x3, double y3);
   void GetRefPoint(const Resample& referenceline, const double s,

@@ -1,11 +1,12 @@
 // Copyright @2022 HITCSC. All rights reserved.
 // Authors: Hongxu Cao (chx19990218@qq.com)
 
-#include "map.h"
 #include <fstream>
 #include <iostream>
+#include "map.h"
+#include "config.h"
 
-void GenerateMap() {
+void GenerateMap(const Config& config, const Obstacle& obstacle) {
   Map map;
   map.GenerateMap();
   std::ofstream flightlog;
@@ -37,7 +38,18 @@ void GenerateMap() {
     int inner_num = static_cast<int>(inner_dist / interval);
     dot_count += inner_num;
   }
+
+  double x_l = std::min(obstacle.obstacle_pos_[0][0], obstacle.obstacle_pos_[2][0]);
+  double x_r = std::max(obstacle.obstacle_pos_[0][0], obstacle.obstacle_pos_[2][0]);
+  double y_l = std::min(obstacle.obstacle_pos_[0][1], obstacle.obstacle_pos_[2][1]);
+  double y_r = std::max(obstacle.obstacle_pos_[0][1], obstacle.obstacle_pos_[2][1]);
+  for (double i = x_l; i <= x_r; i += interval) {
+    for (double j = y_l; j <= y_r; j += interval) {
+      dot_count++;
+    }
+  }
   dot_count *= height;
+  
   flightlog << "WIDTH " << dot_count << std::endl;
   flightlog << "HEIGHT 1" << std::endl;
   flightlog << "VIEWPOINT 0 0 0 1 0 0 0" << std::endl;
@@ -73,6 +85,13 @@ void GenerateMap() {
       for (int k = 0; k < height; k++) {
         flightlog << inner_now_x + j * inner_x_interval << " "
           << inner_now_y + j * inner_y_interval << " " << k * 0.05 << std::endl;
+      }
+    }
+  }
+  for (double i = x_l; i <= x_r; i += interval) {
+    for (double j = y_l; j <= y_r; j += interval) {
+      for (int k = 0; k < height; k++) {
+        flightlog << i << " " << j << " " << k * 0.05 << std::endl;
       }
     }
   }

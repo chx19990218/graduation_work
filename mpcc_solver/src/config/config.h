@@ -23,6 +23,8 @@ class Config {
   double obs_y;
   int N_SPLINE;
   bool obs_penalty_valid;
+  bool generate_pcd_map_flag;
+  bool enable_dp_flag;
 
   Config(const ros::NodeHandle& nh) {
     nh.getParam("theta_dot_upper_limit", theta_dot_upper_limit);
@@ -41,5 +43,7 @@ class Config {
     nh.getParam("end_gain_rate", end_gain_rate);
     nh.getParam("obs_x", obs_x);
     nh.getParam("obs_y", obs_y);
+    nh.getParam("generate_pcd_map_flag", generate_pcd_map_flag);
+    nh.getParam("enable_dp_flag", enable_dp_flag);
   }
 };

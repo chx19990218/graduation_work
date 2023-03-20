@@ -153,7 +153,7 @@ void Search::ResampleBorder(const Map& map, int last_index, int now_index,
 
 void Search::SphereSearch(const Map& map) {
   // 设置起始位置
-  double now_x = 0.5, now_y = 0.5;
+  double now_x = map.center_point_[0][0], now_y = map.center_point_[0][1];
   double start_x = now_x;
   double start_y = now_y;
   result_x.emplace_back(start_x);

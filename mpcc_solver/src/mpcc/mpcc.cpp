@@ -67,6 +67,7 @@ void Mpcc::Init(const Resample& referenceline, Eigen::SparseMatrix<double> state
 
     std::vector<double> new_state{pos_xy[0], std::cos(phi) * a * i * Ts,
                                   pos_xy[1], std::sin(phi) * a * i * Ts, theta};
+    // std::cout << new_state[1] << "," << new_state[3] <<std::endl;
     Stage stage_i(new_state);
     stage.emplace_back(stage_i);
     optimal_theta.emplace_back(theta);

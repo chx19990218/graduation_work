@@ -18,7 +18,7 @@ void Mpcc::SetConstrains(const Resample& referenceline, const Map& map,
   for (int i = 0; i < horizon; i++) {
     double x = stage[i].state[0];
     double y = stage[i].state[2];
-    std::vector<double> border = GetPointBorderConstrain(map, x, y, referenceline);
+    std::vector<double> border = GetPointBorderConstrain(map, x, y, referenceline, config);
     // std::cout << border[0] << "," << border[1] << "," << border[2] << "," << border[3] << std::endl;
     double numer = -(border[0] - border[2]);
     double denom = (border[1] - border[3]);
@@ -80,17 +80,21 @@ void Mpcc::SetConstrains(const Resample& referenceline, const Map& map,
 }
 
 std::vector<double> Mpcc::GetPointBorderConstrain(const Map& map, double x,
-                                                  double y, const Resample& referenceline) {
+                                                  double y, const Resample& referenceline,
+                                                  const Config& config) {
+  double horizon_dist = horizon * config.theta_dot_upper_limit * Ts + 0.1;
+  double now_theta = referenceline.spline.porjectOnSpline(x, y);
+  double obs_x = (obstacle_pos_[0][0] + obstacle_pos_[2][0]) / 2.0;
+  double obs_y = (obstacle_pos_[0][1] + obstacle_pos_[2][1]) / 2.0;
+  double obs_theta = referenceline.spline.porjectOnSpline(obs_x, obs_y);
+  bool get_into_obstacle_flag = std::fabs(obs_theta - now_theta) < horizon_dist / 4.0;
   int stage_index = GetStage(map, x, y);
   std::vector<double> res(4);
   if (stage_index >= 0) {
-    // // 进入障碍区，后续更新进入条件
-    // if (y > 2.0 && y < 4.0 && x < 1.0) {
-      
-    //   res = GetBorder(x, y);
-      
-    // } else { // 没进入障碍区
-      // 直接用参考线向两侧拓展一个半径
+    if (config.enable_dp_flag && get_into_obstacle_flag) {// 进入障碍区
+      res = GetBorder(x, y);
+    } else { // 没进入障碍区
+      // 方式一：直接用参考线向两侧拓展一个半径
       // double s = referenceline.spline.porjectOnSpline(x, y);
       // auto center_p = referenceline.spline.getPostion(s);
       // auto center_v = referenceline.spline.getDerivative(s);
@@ -103,7 +107,8 @@ std::vector<double> Mpcc::GetPointBorderConstrain(const Map& map, double x,
       // res[1] = y_outer;
       // res[2] = x_inner;
       // res[3] = y_inner;
-      // 向直角转弯的走廊边界作垂线获得边界
+
+      // 方式二：向直角转弯的走廊边界作垂线获得边界
       double x1 = map.outer_point_x_[stage_index];
       double y1 = map.outer_point_y_[stage_index];
       double x2 = map.outer_point_x_[stage_index + 1];
@@ -118,7 +123,7 @@ std::vector<double> Mpcc::GetPointBorderConstrain(const Map& map, double x,
       std::vector<double> inner_vertical_point = GetVerticalPoint(x1, y1, x2, y2, x, y);
       res[2] = inner_vertical_point[0];
       res[3] = inner_vertical_point[1];
-    // }
+    }
   }
   return res;
 }

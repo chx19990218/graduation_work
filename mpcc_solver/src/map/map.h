@@ -28,9 +28,9 @@ enum VecType {
 class Map {
  public:
   std::vector<std::vector<double>> center_point_{
-      {0.5, 0.5}, {0.5, 4.5}, {1.5, 4.5}, {1.5, 6.5},
-      {3.5, 6.5}, {3.5, 9.0}, {4.7, 9.0}, {4.7, 3.0},
-      {3.0, 3.0}, {3.0, 0.5}};
+      {-1.5, -3.5}, {-1.5, 0.5}, {-0.5, 0.5}, {-0.5, 2.5},
+      {1.5, 2.5}, {1.5, 5.0}, {2.7, 5.0}, {2.7, -1.0},
+      {1.0, -1.0}, {1.0, -3.5}};
 
   Eigen::VectorXd center_point_x_, center_point_y_;
   Eigen::VectorXd outer_point_x_, outer_point_y_;
