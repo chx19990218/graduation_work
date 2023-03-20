@@ -3,8 +3,11 @@
 
 #pragma once
 
+#include <ros/ros.h>
 #include <eigen3/Eigen/Dense>
 #include <eigen3/Eigen/Sparse>
+
+#include <quadrotor_msgs/PositionCommand.h>
 
 #include "osqp_interface.h"
 #include "resample.h"
@@ -78,7 +81,11 @@ class Mpcc {
   std::vector<double> right_border_x;
   std::vector<double> right_border_y;
 
+  quadrotor_msgs::PositionCommand cmdMsg;
+
   bool mpcc_valid_flag_ = false;
+
+  int output_index = 0;
 
   Mpcc();
   void Init(const Resample& referenceline, Eigen::SparseMatrix<double> state,

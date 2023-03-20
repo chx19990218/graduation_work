@@ -331,6 +331,26 @@ void Mpcc::GetErrorInfo(const Resample& referenceline, const Stage& stage,
 
 void Mpcc::SolveQp(const Resample& referenceline, const Map& map, const Config& config,
     Eigen::SparseMatrix<double> state) {
+  geometry_msgs::Point tmpPoint;
+  geometry_msgs::Vector3 tmpVector;
+  if (!mpcc_valid_flag_) {
+    output_index = 0;
+    auto pos_theta = referenceline.spline.getPostion(state.coeffRef(4, 0));
+    tmpPoint.x = pos_theta(0);
+    tmpPoint.y = pos_theta(1);
+    tmpPoint.z = 0.0;
+    cmdMsg.position = tmpPoint;
+    tmpVector.x = 0.0;
+    tmpVector.y = 0.0;
+    tmpVector.z = 0.0;
+    cmdMsg.velocity = tmpVector;
+    tmpVector.x = 0.0;
+    tmpVector.y = 0.0;
+    tmpVector.z = 0.0;
+    cmdMsg.acceleration = tmpVector;
+    cmdMsg.header.stamp = ros::Time::now();
+    return;
+  }
   RecedeOneHorizon(referenceline);
   
   SetConstrains(referenceline, map, state, config);
@@ -339,11 +359,14 @@ void Mpcc::SolveQp(const Resample& referenceline, const Map& map, const Config& 
 
   osqpInterface.updateMatrices(H, f, A, b, C, clow, cupp, ul, uu);
   osqpInterface.solveQP();
+  
   auto solveStatus = osqpInterface.solveStatus();
-
+  
   auto solPtr = osqpInterface.solPtr();
 
   if (solveStatus == OSQP_SOLVED) {
+    // 有解就用第一个
+    output_index = 0;
     optimal_theta.clear();
     x_horizon.clear();
     y_horizon.clear();
@@ -374,9 +397,31 @@ void Mpcc::SolveQp(const Resample& referenceline, const Map& map, const Config& 
       theta_y_.emplace_back(pos(1));
     }
   } else {
+    // 无解, 就用上一帧结果
+    output_index++;
+    // 连续五帧无解，mpcc -> invalid
+    if (output_index > 5) {
+      mpcc_valid_flag_ = false;
+    }
     std::cout << "no solution" << std::endl;
   }
-  std::cout << std::endl;
+  // 防止越界
+  output_index = std::min(output_index, horizon - 1);
+  // 控制指令
+  tmpPoint.x = stage[output_index].state[0];
+  tmpPoint.y = stage[output_index].state[2];
+  tmpPoint.z = 0.0;
+  cmdMsg.position = tmpPoint;
+  tmpVector.x = stage[output_index].state[1];
+  tmpVector.y = stage[output_index].state[3];
+  tmpVector.z = 0.0;
+  cmdMsg.velocity = tmpVector;
+  tmpVector.x = inputPredict.coeffRef(0, output_index);
+  tmpVector.y = inputPredict.coeffRef(1, output_index);
+  tmpVector.z = 0.0;
+  cmdMsg.acceleration = tmpVector;
+  cmdMsg.header.stamp = ros::Time::now();
+  // std::cout << output_index <<  std::endl;
 }
 
 void Mpcc::UpdateResultForPlot(const Resample& referenceline,

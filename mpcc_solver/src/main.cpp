@@ -27,7 +27,6 @@ ros::Publisher drone_pub, theta_pub, predict_pub, theta_predict_pub, cmd_pub, re
 
 geometry_msgs::Point tmpPoint;
 geometry_msgs::Vector3 tmpVector;
-quadrotor_msgs::PositionCommand cmdMsg;
 nav_msgs::Path trajPred_msg;
 nav_msgs::Path theta_trajPred_msg;
 geometry_msgs::PoseStamped tmpPose;
@@ -128,28 +127,6 @@ int main(int argc, char** argv) {
   ros::spinOnce();
   mpcc.UpdateState(resample, state);
   mpcc.Init(resample, state, config);
-  // for (int i = 0; i < cnt; i++) { 
-  //   if (i % 10 == 0){
-  //     std::cout<<"sim times:"<<i<<std::endl;
-  //   } 
-  //   auto start_time = ros::Time::now();
-  //   // 更新theta
-  //   mpcc.UpdateState(resample, state);
-  //   // 求解mpcc
-  //   mpcc.SolveQp(resample, map, state);
-  //   auto end_time = ros::Time::now();
-  //   std::cout << (end_time - start_time).toSec() << std::endl;
-
-  //   // 仿真,先用mpcc预测第一帧
-  //   state = mpcc.statePredict.col(0);
-
-  //   // 更新绘图内容
-  //   mpcc.UpdateResultForPlot(resample, state);
-  // }
-  
-  
-
-
 
   while (ros::ok()) {
     ros::spinOnce();
@@ -162,7 +139,7 @@ int main(int argc, char** argv) {
       mpcc.mpcc_valid_flag_ = false;
     } else {
       // 在范围内, 如果离参考线不远, 启用mpcc
-      // 一旦启用，只有出范围才会关掉
+      // 一旦启用，只有出范围 和 连续五帧无解 才会关掉
       auto pos_theta = resample.spline.getPostion(state.coeffRef(4, 0));
       bool long_dist_with_refer_flag = std::sqrt(std::pow(pos_theta(0) - state.coeffRef(0, 0), 2)
         + std::pow(pos_theta(1) - state.coeffRef(2, 0), 2)) > config.mpcc_valid_dist;
@@ -171,9 +148,8 @@ int main(int argc, char** argv) {
       }
     }
 
-    if (mpcc.mpcc_valid_flag_) {
-      mpcc.SolveQp(resample, map, config, state);
-    }
+    mpcc.SolveQp(resample, map, config, state);
+
     mpcc.x_history.emplace_back(state.coeffRef(0, 0));
     mpcc.y_history.emplace_back(state.coeffRef(2, 0));
     publish_topic(mpcc, resample);
@@ -194,24 +170,23 @@ void odom_callback(const nav_msgs::Odometry& odom){
 }
 
 void publish_topic(Mpcc& mpcc, const Resample& resample) {
+  // 控制指令
+  cmd_pub.publish(mpcc.cmdMsg);
+
+  // rviz 无人机箭头
+  drone_msg.points.clear();
+  pt.x = state.coeffRef(0,0);
+  pt.y = state.coeffRef(2,0);
+  pt.z = 0.0;
+  drone_msg.points.push_back(pt);
+  pt.x += state.coeffRef(1,0) / 2.0;
+  pt.y += state.coeffRef(3,0) / 2.0;
+  pt.z += 0.0;
+  drone_msg.points.push_back(pt);
+  drone_pub.publish(drone_msg);
+
   // mpcc无效时，向state的theta点走
   if (mpcc.mpcc_valid_flag_) {
-    // 控制指令
-    tmpPoint.x = mpcc.stage[0].state[0];
-    tmpPoint.y = mpcc.stage[0].state[2];
-    tmpPoint.z = 0.0;
-    cmdMsg.position = tmpPoint;
-    tmpVector.x = mpcc.stage[0].state[1];
-    tmpVector.y = mpcc.stage[0].state[3];
-    tmpVector.z = 0.0;
-    cmdMsg.velocity = tmpVector;
-    tmpVector.x = mpcc.inputPredict.coeffRef(0, 0);
-    tmpVector.y = mpcc.inputPredict.coeffRef(1, 0);
-    tmpVector.z = 0.0;
-    cmdMsg.acceleration = tmpVector;
-    cmdMsg.header.stamp = ros::Time::now();
-    cmd_pub.publish(cmdMsg);
-
     // rviz 预测轨迹
     trajPred_msg.poses.resize(mpcc.horizon);
     for (int i = 0; i < mpcc.horizon; i++) {
@@ -233,18 +208,6 @@ void publish_topic(Mpcc& mpcc, const Resample& resample) {
     }
     theta_predict_pub.publish(theta_trajPred_msg);
 
-    // rviz 无人机箭头
-    drone_msg.points.clear();
-    pt.x = state.coeffRef(0,0);
-    pt.y = state.coeffRef(2,0);
-    pt.z = 0.0;
-    drone_msg.points.push_back(pt);
-    pt.x += state.coeffRef(1,0) / 2.0;
-    pt.y += state.coeffRef(3,0) / 2.0;
-    pt.z += 0.0;
-    drone_msg.points.push_back(pt);
-    drone_pub.publish(drone_msg);
-
     // rviz theta箭头
     theta_msg.points.clear();
     auto pos = resample.spline.getPostion(state.coeffRef(4,0));
@@ -261,44 +224,15 @@ void publish_topic(Mpcc& mpcc, const Resample& resample) {
     theta_msg.points.push_back(pt);
     theta_pub.publish(theta_msg);
   } else {
-    // 控制指令
-    auto pos_theta = resample.spline.getPostion(state.coeffRef(4, 0));
-    tmpPoint.x = pos_theta(0);
-    tmpPoint.y = pos_theta(1);
-    tmpPoint.z = 0.0;
-    cmdMsg.position = tmpPoint;
-    tmpVector.x = 0.0;
-    tmpVector.y = 0.0;
-    tmpVector.z = 0.0;
-    cmdMsg.velocity = tmpVector;
-    tmpVector.x = 0.0;
-    tmpVector.y = 0.0;
-    tmpVector.z = 0.0;
-    cmdMsg.acceleration = tmpVector;
-    cmdMsg.header.stamp = ros::Time::now();
-    cmd_pub.publish(cmdMsg);
-
-    // rviz 无人机箭头
-    drone_msg.points.clear();
-    pt.x = state.coeffRef(0,0);
-    pt.y = state.coeffRef(2,0);
-    pt.z = 0.0;
-    drone_msg.points.push_back(pt);
-    pt.x += state.coeffRef(1,0) / 2.0;
-    pt.y += state.coeffRef(3,0) / 2.0;
-    pt.z += 0.0;
-    drone_msg.points.push_back(pt);
-    drone_pub.publish(drone_msg);
-
     // rviz theta箭头
     theta_msg.points.clear();
     pt.x = state.coeffRef(0,0);
     pt.y = state.coeffRef(2,0);
     pt.z = 0.0;
     theta_msg.points.push_back(pt);
-    auto vel = resample.spline.getDerivative(state.coeffRef(4,0));
-    pt.x = pos_theta(0);
-    pt.y = pos_theta(1);
+    auto pos = resample.spline.getPostion(state.coeffRef(4,0));
+    pt.x = pos(0);
+    pt.y = pos(1);
     pt.z = 0.0;
     theta_msg.points.push_back(pt);
     theta_pub.publish(theta_msg);

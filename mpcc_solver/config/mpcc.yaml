@@ -1,5 +1,5 @@
 # constrains
-theta_dot_upper_limit : 5.0
+theta_dot_upper_limit : 3.0
 angle_upper_limit : 45.0  # deg
 
 # mpcc
