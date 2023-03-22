@@ -81,7 +81,7 @@ class Mpcc {
   std::vector<double> right_border_x;
   std::vector<double> right_border_y;
   std::vector<std::vector<double>> obstacle_pos_{
-      {-1.7, -1.2}, {-1.0, -1.2}, {-1.0, -1.0}, {-1.7, -1.0}};
+      {-1.6, -1.2}, {-1.0, -1.2}, {-1.0, -1.0}, {-1.6, -1.0}};
 
   quadrotor_msgs::PositionCommand cmdMsg;
 

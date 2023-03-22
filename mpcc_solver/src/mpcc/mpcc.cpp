@@ -174,25 +174,26 @@ void Mpcc::CalculateCost(const Resample& referenceline, const Config& config,
         gain = config.end_gain_rate;
       }
       double w_c_gain = 1.0;
-      // 根据kappa调整横向系数提高安全性
-      if (i > 0 && i < horizon - 1) {
-        std::vector<std::vector<double>> points{{stage[i - 1].state[0], stage[i - 1].state[2]},
-                                                {stage[i].state[0], stage[i].state[2]},
-                                                {stage[i + 1].state[0], stage[i + 1].state[2]}};
-        double kappa = GetKappa(points);
-        double kappa_lower_limit = 2.0;
-        double kappa_upper_limit = 4.0;
-        double w_c_gain_upper = 2.0;
-        double w_c_gain_lower = 1.0;
+      // // 加上效果不好，先不用
+      // // 根据kappa调整横向系数提高安全性
+      // if (i > 0 && i < horizon - 1) {
+      //   std::vector<std::vector<double>> points{{stage[i - 1].state[0], stage[i - 1].state[2]},
+      //                                           {stage[i].state[0], stage[i].state[2]},
+      //                                           {stage[i + 1].state[0], stage[i + 1].state[2]}};
+      //   double kappa = GetKappa(points);
+      //   double kappa_lower_limit = 2.0;
+      //   double kappa_upper_limit = 4.0;
+      //   double w_c_gain_upper = 2.0;
+      //   double w_c_gain_lower = 1.0;
         
-        if (kappa >= kappa_lower_limit && kappa < kappa_upper_limit) {
-          w_c_gain = (kappa - kappa_lower_limit) * (w_c_gain_upper - w_c_gain_lower)
-            / (kappa_upper_limit - kappa_lower_limit) + w_c_gain_lower;
-        } else if (kappa >= kappa_upper_limit) {
-          w_c_gain = w_c_gain_upper;
-        }
-        // std::cout << kappa << "," << w_c_gain << std::endl;
-      }
+      //   if (kappa >= kappa_lower_limit && kappa < kappa_upper_limit) {
+      //     w_c_gain = (kappa - kappa_lower_limit) * (w_c_gain_upper - w_c_gain_lower)
+      //       / (kappa_upper_limit - kappa_lower_limit) + w_c_gain_lower;
+      //   } else if (kappa >= kappa_upper_limit) {
+      //     w_c_gain = w_c_gain_upper;
+      //   }
+      //   // std::cout << kappa << "," << w_c_gain << std::endl;
+      // }
       Qn = 2 * Eigen::SparseMatrix<double>(dEc.transpose()) * w_c_gain * gain * w_c * dEc +
            2 * Eigen::SparseMatrix<double>(dEl.transpose()) * gain * w_l * dEl;
       Eigen::SparseMatrix<double> c = dEc * X;

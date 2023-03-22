@@ -21,6 +21,7 @@ class Config {
   double end_gain_rate;
   double obs_x;
   double obs_y;
+  double dp_length_rate;
   int N_SPLINE;
   bool obs_penalty_valid;
   bool generate_pcd_map_flag;
@@ -45,5 +46,6 @@ class Config {
     nh.getParam("obs_y", obs_y);
     nh.getParam("generate_pcd_map_flag", generate_pcd_map_flag);
     nh.getParam("enable_dp_flag", enable_dp_flag);
+    nh.getParam("dp_length_rate", dp_length_rate);
   }
 };

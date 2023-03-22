@@ -13,12 +13,12 @@
 
 class Obstacle {
  public:
-  int row_size = 20;
-  int col_size = 10;
+  int row_size = 100;
+  int col_size = 3;
   double dead_cost = 500.0;
   double similarity_weight = 1.0;
-  double length_weight = 0.5;
-  double angle_weight = 0.1;
+  double length_weight = 1.0;
+  double angle_weight = 1.0;
   double time_step_cost_discount_factor = 1.0;
   std::vector<std::vector<double>> grid_x_, grid_y_;
   std::vector<std::vector<bool>> occupied_flag_;

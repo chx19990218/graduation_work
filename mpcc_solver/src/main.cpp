@@ -120,11 +120,11 @@ int main(int argc, char** argv) {
   }
   refer_pub.publish(refTraj_msg);
 
+  
+  ros::spinOnce();
   if (config.enable_dp_flag) {
     obstacle.Update(resample, map, mpcc, state, config);
   }
-  
-  ros::spinOnce();
   mpcc.UpdateState(resample, state);
   mpcc.Init(resample, state, config);
 

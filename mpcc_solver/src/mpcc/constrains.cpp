@@ -32,6 +32,7 @@ void Mpcc::SetConstrains(const Resample& referenceline, const Map& map,
     // xup.coeffRef(i, 0) = 100000;
     // xlow.coeffRef(i, 0) = -100000;
   }
+  // std::cout << std::endl;
   // 速度限制
   // TODO
 
@@ -83,11 +84,14 @@ std::vector<double> Mpcc::GetPointBorderConstrain(const Map& map, double x,
                                                   double y, const Resample& referenceline,
                                                   const Config& config) {
   double horizon_dist = horizon * config.theta_dot_upper_limit * Ts + 0.1;
+  double obs_size = std::max(std::fabs(obstacle_pos_[0][0] - obstacle_pos_[2][0]),
+    std::fabs(obstacle_pos_[0][1] - obstacle_pos_[2][1]));
   double now_theta = referenceline.spline.porjectOnSpline(x, y);
   double obs_x = (obstacle_pos_[0][0] + obstacle_pos_[2][0]) / 2.0;
   double obs_y = (obstacle_pos_[0][1] + obstacle_pos_[2][1]) / 2.0;
   double obs_theta = referenceline.spline.porjectOnSpline(obs_x, obs_y);
-  bool get_into_obstacle_flag = std::fabs(obs_theta - now_theta) < horizon_dist / 4.0;
+  bool get_into_obstacle_flag = std::fabs(obs_theta - now_theta) <
+    std::max(horizon_dist * config.dp_length_rate, obs_size);
   int stage_index = GetStage(map, x, y);
   std::vector<double> res(4);
   if (stage_index >= 0) {
@@ -180,6 +184,7 @@ std::vector<double> Mpcc::GetBorder(double now_x, double now_y) {
       }
     }
   }
+  // std::cout << border[0] << "," << border[1] << "," << border[2] << "," << border[3] << std::endl;
   return border;
 }
 

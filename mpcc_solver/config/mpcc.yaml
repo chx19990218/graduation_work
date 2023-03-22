@@ -1,12 +1,12 @@
 # constrains
-theta_dot_upper_limit : 3.0
+theta_dot_upper_limit : 5.0
 angle_upper_limit : 30.0  # deg
 
 # mpcc
 end_gain_rate : 20.0 #ec, el param rate of end point 
 w_c : 1.0
 w_l : 10.0
-gamma : 20.0
+gamma : 10.0
 w_u : 0.01
 w_deltau : 0.001
 
@@ -16,13 +16,12 @@ N_SPLINE : 5000
 # mpcc valid when dist < 0.3
 mpcc_valid_dist : 0.3
 
-# obs penalty
+# obs penalty and constrains
 obs_penalty_valid : false
 Qobs : 0.2
 obs_x : -1.7
 obs_y : -1.1
-# 退化成一个点
-obs_x_r : 0.00001
+obs_x_r : 0.00001 # 退化成一个点
 obs_y_r : 0.00001
 
 # generate map
@@ -30,3 +29,4 @@ generate_pcd_map_flag : false
 
 # dp
 enable_dp_flag : true
+dp_length_rate : 0.25 # dp_length / 2 * horizon_dist

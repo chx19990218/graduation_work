@@ -5,7 +5,7 @@
 
 void Obstacle::Update(const Resample& referenceline, const Map& map,
                       Mpcc& mpcc, Eigen::SparseMatrix<double> state, const Config& config) {
-  obstacle_pos_ = mpcc. obstacle_pos_;
+  obstacle_pos_ = mpcc.obstacle_pos_;
   GenerateGridCoordinate(referenceline, map, mpcc, config);
   DPForward(mpcc, referenceline, state);
   DPBackward(mpcc);
@@ -18,9 +18,12 @@ void Obstacle::GenerateGridCoordinate(const Resample& referenceline,
   double obs_y = (obstacle_pos_[0][1] + obstacle_pos_[2][1]) / 2.0;
   double obs_theta = referenceline.spline.porjectOnSpline(obs_x, obs_y);
   double horizon_dist = mpcc.horizon * config.theta_dot_upper_limit * mpcc.Ts + 0.1;
-  // 用1/4 horizon_dist作为dp范围
-  double start_theta = std::max(obs_theta - horizon_dist / 4.0, 0.0);
-  double end_theta = obs_theta + horizon_dist / 4.0;
+  double obs_size = std::max(std::fabs(obstacle_pos_[0][0] - obstacle_pos_[2][0]),
+    std::fabs(obstacle_pos_[0][1] - obstacle_pos_[2][1]));
+  // 用 rate * horizon_dist作为dp范围
+  double start_theta = std::max(obs_theta -
+    std::max(horizon_dist * config.dp_length_rate, obs_size), 0.0);
+  double end_theta = obs_theta + horizon_dist * config.dp_length_rate;
   double interval = (end_theta - start_theta) / static_cast<double>(row_size);
   // std::cout << start_theta << "," << obs_theta << "," << end_theta << std::endl;
 
@@ -28,6 +31,8 @@ void Obstacle::GenerateGridCoordinate(const Resample& referenceline,
   grid_x_.clear();
   grid_y_.clear();
   occupied_flag_.clear();
+  std::vector<double> temp_x, temp_y;
+  std::vector<bool> temp_flag;
   for (int i = 0; i < row_size; i++) {
     double theta = start_theta + interval * i;
     Eigen::Vector2d pos = referenceline.spline.getPostion(theta);
@@ -48,28 +53,44 @@ void Obstacle::GenerateGridCoordinate(const Resample& referenceline,
     std::vector<double> inner_border_point =
         GetIntersectionPoint(pos, border_point1, border_point2, vec_v);
 
-    double x_interval = (outer_border_point[0] - inner_border_point[0]) /
+    double x_interval = (inner_border_point[0] - outer_border_point[0]) /
                         static_cast<double>(col_size + 1);
-    double y_interval = (outer_border_point[1] - inner_border_point[1]) /
+    double y_interval = (inner_border_point[1] - outer_border_point[1]) /
                         static_cast<double>(col_size + 1);
-    std::vector<double> temp_x, temp_y;
-    std::vector<bool> temp_flag;
-    for (int i = 0; i < col_size; i++) {
-      double x = inner_border_point[0] + x_interval * (i + 1);
-      double y = inner_border_point[1] + y_interval * (i + 1);
 
-      temp_flag.emplace_back(mpcc.InRec(obstacle_pos_, x, y));
+    // std::cout << x_interval << "," << y_interval << std::endl;
+    temp_x.clear();
+    temp_y.clear();
+    temp_flag.clear();
+    for (int i = 0; i < col_size; i++) {
+      double x = outer_border_point[0] + x_interval * (i + 1);
+      double y = outer_border_point[1] + y_interval * (i + 1);
+      // std::cout << mpcc.InQuad(obstacle_pos_, x, y);
+      temp_flag.emplace_back(mpcc.InQuad(obstacle_pos_, x, y));
       temp_x.emplace_back(x);
       temp_y.emplace_back(y);
     }
+    // std::cout << std::endl;
     occupied_flag_.emplace_back(temp_flag);
     grid_x_.emplace_back(temp_x);
     grid_y_.emplace_back(temp_y);
   }
+  // for (int i = 0;i<grid_x_.size();i++){
+  //   for (int j = 0;j<grid_x_[0].size();j++){
+  //     std::cout << occupied_flag_[i][j];
+  //   }
+  //   std::cout << std::endl;
+  // }
+  // std::cout <<grid_y_.size() << "," << grid_x_[0].size() <<std::endl;
 }
 
 void Obstacle::DPForward(Mpcc& mpcc, const Resample& referenceline,
     Eigen::SparseMatrix<double> state) {
+  // TODO
+  state.coeffRef(0, 0) = (grid_x_[0][0] + grid_x_[0].back()) / 2.0;
+  state.coeffRef(1, 0) = 0.0;
+  state.coeffRef(2, 0) = (grid_y_[0][0] + grid_y_[0].back()) / 2.0;
+  state.coeffRef(3, 0) = 1.0;
   bool get_valid_next_flag;
   bool get_valid_path_flag = false;
   for (int layer = row_size - 2; layer >= 0; layer--) {
@@ -79,6 +100,9 @@ void Obstacle::DPForward(Mpcc& mpcc, const Resample& referenceline,
       }
       for (int now_index = 0; now_index < col_size; now_index++) {
         if (occupied_flag_[layer][now_index]) {
+          // 之前这里没有赋值，导致dp搜索有问题，已修复
+          optimal_cost[layer + 1][now_index][prev_index] = dead_cost;
+          optimal_index[layer + 1][now_index][prev_index] = -1;
           continue;
         }
         get_valid_next_flag = false;
@@ -86,7 +110,9 @@ void Obstacle::DPForward(Mpcc& mpcc, const Resample& referenceline,
         int min_cost_next_index;
         for (int next_index = 0; next_index < col_size; next_index++) {
           if (PathIsObstructed(layer, now_index, next_index)) {
+            // std::cout << layer << "," << prev_index << "," << now_index << "," << next_index << std::endl;
             if (next_index == col_size - 1 && !get_valid_next_flag) {
+              // std::cout << "......." << std::endl;
               optimal_cost[layer + 1][now_index][prev_index] = dead_cost;
               optimal_index[layer + 1][now_index][prev_index] = -1;
               break;
@@ -112,6 +138,12 @@ void Obstacle::DPForward(Mpcc& mpcc, const Resample& referenceline,
                          time_step_cost_discount_factor *
                              optimal_cost[layer + 2][next_index][now_index];
           }
+          // if (layer == 11 && prev_index == 0 && now_index == 3 && next_index == 4) {
+          //   std::cout << "scshjksc:" << total_cost << "," << optimal_cost[layer + 2][next_index][now_index] << std::endl;
+          // }
+          // if (layer == 11 && prev_index == 2 && now_index == 3 && next_index == 4) {
+          //   std::cout << "bfbfbf:" << total_cost << "," << optimal_cost[layer + 2][next_index][now_index] << std::endl;
+          // }
           //第一次到这
           if (!get_valid_next_flag) {
             min_cost = total_cost;
@@ -134,7 +166,7 @@ void Obstacle::DPForward(Mpcc& mpcc, const Resample& referenceline,
         }
       }
       if (!get_valid_next_flag) {
-        std::cout << "no_valid_path!" << std::endl;
+        std::cout << "no_valid_path : " << layer << "," << prev_index << std::endl;
       }
       // 第一层点时，前面只有无人机一个点，prev_index只作一次循环即可，在此break
       if (layer == 0) {
@@ -181,7 +213,6 @@ void Obstacle::DPBackward(Mpcc& mpcc) {
   std::vector<double> optimal_path_x;
   std::vector<double> optimal_path_y;
   
-  
   optimal_path.clear();
   optimal_path_x.clear();
   optimal_path_y.clear();
@@ -204,10 +235,37 @@ void Obstacle::DPBackward(Mpcc& mpcc) {
 }
 
 void Obstacle::ExpandPath(Mpcc& mpcc) {
+  // 第一个代表无人机点， 先这么用
+  optimal_path[0] = optimal_path[1];
   std::vector<double> left_border_x;
   std::vector<double> left_border_y;
   std::vector<double> right_border_x;
   std::vector<double> right_border_y;
+  // // 左边界最内侧点
+  // int left_most_inner_row = 0;
+  // int left_most_inner_col = 0;
+  // // 左边界第一个不为零点
+  // int left_first_row = 0;
+  // int left_first_col = 0;
+  // // 左边界最后一个不为零点
+  // int left_last_row = row_size - 1;
+  // int left_last_col = 0;
+
+  // bool left_flag = false;
+
+  // // 右边界最内侧点
+  // int right_most_inner_row = 0;
+  // int right_most_inner_col = col_size - 1;
+  // // 右边界第一个不为零点
+  // int right_first_row = 0;
+  // int right_first_col = 0;
+  // // 右边界最后一个不为零点
+  // int right_last_row = row_size - 1;
+  // int right_last_col = 0;
+
+  // bool right_flag = false;
+
+
   for (int i = 0; i < optimal_path.size(); i++) {
     int left = optimal_path[i];
     int right = optimal_path[i];
@@ -218,8 +276,40 @@ void Obstacle::ExpandPath(Mpcc& mpcc) {
       }
       left = j;
     }
-    left_border_x.emplace_back(grid_x_[i][left]);
-    left_border_y.emplace_back(grid_y_[i][left]);
+    // if (left > left_most_inner_col) {
+    //   left_most_inner_row = i;
+    //   left_most_inner_col = left;
+    // }
+    // if (left != 0 && !left_flag) {
+    //   left_first_row = i;
+    //   left_first_col = left;
+    //   left_flag = true;
+    // }
+    // if (left != 0) {
+    //   left_last_row = i;
+    //   left_last_col = left;
+    // }
+    double left_x, left_y;
+    if (left == 0) {
+      left_x = 2 * grid_x_[i][0] - grid_x_[i][1];
+      left_y = 2 * grid_y_[i][0] - grid_y_[i][1];
+    } else {
+      double x, y;
+      for (double rate = 1.0; rate > 0.0; rate -= 0.02) {
+        x = grid_x_[i][left - 1] + rate * (grid_x_[i][left] - grid_x_[i][left - 1]);
+        y = grid_y_[i][left - 1] + rate * (grid_y_[i][left] - grid_y_[i][left - 1]);
+        if (mpcc.InQuad(obstacle_pos_, x, y)) {
+          break;
+        }
+      }
+      left_x = x;
+      left_y = y;
+    }
+    // left_border_x.emplace_back(grid_x_[i][left]);
+    // left_border_y.emplace_back(grid_y_[i][left]);
+    left_border_x.emplace_back(left_x);
+    left_border_y.emplace_back(left_y);
+
     // 向右
     for (int j = optimal_path[i] + 1; j < col_size; j++) {
       if (occupied_flag_[i][j]) {
@@ -227,26 +317,94 @@ void Obstacle::ExpandPath(Mpcc& mpcc) {
       }
       right = j;
     }
-    right_border_x.emplace_back(grid_x_[i][right]);
-    right_border_y.emplace_back(grid_y_[i][right]);
+    // // std::cout << "right:" << right << std::endl;
+    // if (right < right_most_inner_col) {
+    //   right_most_inner_row = i;
+    //   right_most_inner_col = right;
+    //   }
+    // if (right != col_size - 1 && !right_flag) {
+    //   right_first_row = i;
+    //   right_first_col = right;
+    //   right_flag = true;
+    // }
+    // if (right != col_size - 1) {
+    //   right_last_row = i;
+    //   right_last_col = right;
+    // }
+    double right_x, right_y;
+    if (right == col_size - 1) {
+      right_x = 2 * grid_x_[i][col_size - 1] - grid_x_[i][col_size - 2];
+      right_y = 2 * grid_y_[i][col_size - 1] - grid_y_[i][col_size - 2];
+    } else {
+      double x, y;
+      for (double rate = 1.0; rate > 0.0; rate -= 0.02) {
+        x = grid_x_[i][right + 1] + rate * (grid_x_[i][right] - grid_x_[i][right + 1]);
+        y = grid_y_[i][right + 1] + rate * (grid_y_[i][right] - grid_y_[i][right + 1]);
+        if (mpcc.InQuad(obstacle_pos_, x, y)) {
+          break;
+        }
+      }
+      right_x = x;
+      right_y = y;
+    }
+
+    // right_border_x.emplace_back(grid_x_[i][right]);
+    // right_border_y.emplace_back(grid_y_[i][right]);
+    right_border_x.emplace_back(right_x);
+    right_border_y.emplace_back(right_y);
+
+    // std::cout << i << "," << optimal_path[i] << std::endl;
   }
+  // // 作插值，暂不启用
+  // // 左侧有障碍物
+  // if (left_most_inner_col > 0) {
+  //   for (int i = 0; i < row_size; i++) {
+  //     if (i <  left_first_row) {
+  //       left_border_x[i] = i * (left_border_x[left_first_row] - left_border_x[0]) / left_first_row + left_border_x[0];
+  //       left_border_y[i] = i * (left_border_y[left_first_row] - left_border_y[0]) / left_first_row + left_border_y[0];
+  //     }
+  //     if (i >  left_last_row) {
+  //       left_border_x[i] = left_border_x[row_size - 1] - (row_size - 1 - i) * (left_border_x[row_size - 1] - left_border_x[left_last_row]) / (row_size - 1 - left_last_row);
+  //       left_border_y[i] = left_border_y[row_size - 1] - (row_size - 1 - i) * (left_border_y[row_size - 1] - left_border_y[left_last_row]) / (row_size - 1 - left_last_row);
+  //     }
+  //   }
+  // }
+  // // 右侧有障碍物
+  // if (right_most_inner_col < col_size - 1) {
+  //   for (int i = 0; i < row_size; i++) {
+  //     if (i <  right_first_row) {
+  //       right_border_x[i] = i * (right_border_x[right_first_row] - right_border_x[0]) / right_first_row + right_border_x[0];
+  //       right_border_y[i] = i * (right_border_y[right_first_row] - right_border_y[0]) / right_first_row + right_border_y[0];
+  //     }
+  //     if (i >  right_last_row) {
+  //       right_border_x[i] = right_border_x[row_size - 1] - (row_size - 1 - i) * (right_border_x[row_size - 1] - right_border_x[right_last_row]) / (row_size - 1 - right_last_row);
+  //       right_border_y[i] = right_border_y[row_size - 1] - (row_size - 1 - i) * (right_border_y[row_size - 1] - right_border_y[right_last_row]) / (row_size - 1 - right_last_row);
+  //       std::cout <<  right_border_x[i] << "," << right_border_y[i] << "," << (row_size - 1 - i) / (row_size - 1 - right_last_row) << std::endl;     
+  //     }
+  //   }
+  // }
+  
   mpcc.left_border_x = left_border_x;
   mpcc.left_border_y = left_border_y;
   mpcc.right_border_x = right_border_x;
   mpcc.right_border_y = right_border_y;
+  
+  // std::cout << left_most_inner_row << "," << left_most_inner_col << "," << right_most_inner_row << "," << right_most_inner_col << std::endl;
+  // std::cout << left_first_row << "," << left_first_col << "," << right_first_row << "," << right_first_col << std::endl;
+  // std::cout << left_last_row << "," << left_last_col << "," << right_last_row << "," << right_last_col << std::endl;
 }
 
 
 
 bool Obstacle::PathIsObstructed(int layer, int now_index, int next_index) {
   if (now_index < next_index) {
-    for (int i = now_index; i <= next_index; i++) {
+    for (int i = now_index + 1; i < next_index; i++) {
       if (occupied_flag_[layer][i] || occupied_flag_[layer + 1][i]) {
         return true;
       }
     }
   } else {
-    for (int i = next_index; i <= now_index; i++) {
+    for (int i = next_index + 1; i < now_index; i++) {
       if (occupied_flag_[layer][i] || occupied_flag_[layer + 1][i]) {
         return true;
       }
@@ -308,15 +466,19 @@ double Obstacle::GetAngleCost(Mpcc& mpcc, int layer, int prev_index,
     dy2 = y3 - y2;
   }
 
-  double numer = dx1 * dx2 + dy1 * dy2;
-  double denom = std::sqrt((dx1 * dx1 + dy1 * dy1) * (dx2 * dx2 + dy2 * dy2));
-  double ratio = numer / denom;
-  if (ratio > 1) {
-    ratio = 1;
-  } else if (ratio < -1) {
-    ratio = -1;
-  }
-  return acos(ratio);
+  // double numer = dx1 * dx2 + dy1 * dy2;
+  // double denom = std::sqrt((dx1 * dx1 + dy1 * dy1) * (dx2 * dx2 + dy2 * dy2));
+  // double ratio = numer / denom;
+  // if (ratio > 1) {
+  //   ratio = 1;
+  // } else if (ratio < -1) {
+  //   ratio = -1;
+  // }
+  // return -acos(ratio);
+
+  double dx = dx1 - dx2;
+  double dy = dy1 - dy2;
+  return std::sqrt(dx * dx + dy * dy);
 }
 
 std::vector<double> Obstacle::GetIntersectionPoint(
