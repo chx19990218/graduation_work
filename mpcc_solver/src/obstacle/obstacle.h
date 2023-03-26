@@ -13,7 +13,7 @@
 
 class Obstacle {
  public:
-  int row_size = 100;
+  int row_size = 15;
   int col_size = 3;
   double dead_cost = 500.0;
   double similarity_weight = 1.0;
@@ -52,4 +52,6 @@ class Obstacle {
   
   void Update(const Resample& referenceline, const Map& map,
                       Mpcc& mpcc, Eigen::SparseMatrix<double> state, const Config& config);
+  double DynamicInterval(double theta, double interval,
+    double start_theta, double end_theta, double obs_start_theta, double obs_end_theta);
 };

@@ -18,14 +18,45 @@ void Obstacle::GenerateGridCoordinate(const Resample& referenceline,
   double obs_y = (obstacle_pos_[0][1] + obstacle_pos_[2][1]) / 2.0;
   double obs_theta = referenceline.spline.porjectOnSpline(obs_x, obs_y);
   double horizon_dist = mpcc.horizon * config.theta_dot_upper_limit * mpcc.Ts + 0.1;
-  double obs_size = std::max(std::fabs(obstacle_pos_[0][0] - obstacle_pos_[2][0]),
-    std::fabs(obstacle_pos_[0][1] - obstacle_pos_[2][1]));
+  // 投影求size
+  double obs_point_theta1 = referenceline.spline.porjectOnSpline(obstacle_pos_[0][0], obstacle_pos_[0][1]);
+  double obs_point_theta2 = referenceline.spline.porjectOnSpline(obstacle_pos_[1][0], obstacle_pos_[1][1]);
+  double obs_point_theta3 = referenceline.spline.porjectOnSpline(obstacle_pos_[2][0], obstacle_pos_[2][1]);
+  double obs_point_theta4 = referenceline.spline.porjectOnSpline(obstacle_pos_[3][0], obstacle_pos_[3][1]);
+  double obs_size = std::max({obs_point_theta1, obs_point_theta2, obs_point_theta3, obs_point_theta4}) -
+    std::min({obs_point_theta1, obs_point_theta2, obs_point_theta3, obs_point_theta4});
+  double obs_start_theta = obs_theta - obs_size / 2.0;
+  double obs_end_theta = obs_theta + obs_size / 2.0;
   // 用 rate * horizon_dist作为dp范围
   double start_theta = std::max(obs_theta -
     std::max(horizon_dist * config.dp_length_rate, obs_size), 0.0);
   double end_theta = obs_theta + horizon_dist * config.dp_length_rate;
   double interval = (end_theta - start_theta) / static_cast<double>(row_size);
   // std::cout << start_theta << "," << obs_theta << "," << end_theta << std::endl;
+  
+  double theta = obs_theta;
+  std::vector<double> former_theta;
+  double dynamic_interval = interval;
+  while (theta > start_theta) {
+    former_theta.emplace_back(theta);
+    theta -= dynamic_interval;
+    dynamic_interval = DynamicInterval(theta, interval,
+      start_theta, end_theta, obs_start_theta, obs_end_theta);
+  }
+  std::reverse(former_theta.begin(), former_theta.end());
+  std::vector<double> later_theta;
+  theta = obs_theta;
+  dynamic_interval = interval;
+  while (theta < end_theta) {
+    theta += dynamic_interval;
+    if (theta > end_theta) {
+      break;
+    }
+    dynamic_interval = DynamicInterval(theta, interval,
+      start_theta, end_theta, obs_start_theta, obs_end_theta);
+    later_theta.emplace_back(theta);
+  }
+  former_theta.insert(former_theta.end(), later_theta.begin(), later_theta.end());
 
   std::vector<double> border_point1, border_point2;
   grid_x_.clear();
@@ -33,8 +64,13 @@ void Obstacle::GenerateGridCoordinate(const Resample& referenceline,
   occupied_flag_.clear();
   std::vector<double> temp_x, temp_y;
   std::vector<bool> temp_flag;
-  for (int i = 0; i < row_size; i++) {
-    double theta = start_theta + interval * i;
+  
+  
+  for (auto theta : former_theta) {
+    // theta += inte;
+    // dynamic_interval = DynamicInterval(theta, interval,
+    //   start_theta, end_theta, obs_start_theta, obs_end_theta);
+    // std::cout << inte << std::endl;
     Eigen::Vector2d pos = referenceline.spline.getPostion(theta);
     Eigen::Vector2d vec_v = referenceline.spline.getDerivative(theta);
     int stage_index = mpcc.GetStage(map, pos(0), pos(1));
@@ -75,6 +111,7 @@ void Obstacle::GenerateGridCoordinate(const Resample& referenceline,
     grid_x_.emplace_back(temp_x);
     grid_y_.emplace_back(temp_y);
   }
+  row_size = grid_x_.size();
   // for (int i = 0;i<grid_x_.size();i++){
   //   for (int j = 0;j<grid_x_[0].size();j++){
   //     std::cout << occupied_flag_[i][j];
@@ -82,6 +119,31 @@ void Obstacle::GenerateGridCoordinate(const Resample& referenceline,
   //   std::cout << std::endl;
   // }
   // std::cout <<grid_y_.size() << "," << grid_x_[0].size() <<std::endl;
+}
+
+double Obstacle::DynamicInterval(double theta, double interval,
+  double start_theta, double end_theta, double obs_start_theta, double obs_end_theta) {
+  // std::cout << start_theta << "," << end_theta << "," << obs_start_theta << "," << obs_end_theta << std::endl;
+  if (theta >= obs_start_theta && theta <= obs_end_theta) {
+    return interval;
+  } else if (theta < start_theta || theta > end_theta) {
+    std::cout << "Interval optimizition error!" << std::endl;
+    return interval;
+  } else {
+    double dist = std::min(std::fabs(theta - obs_start_theta), std::fabs(theta - obs_end_theta));
+    // y = -ax^2 + 1
+    // 保证obs_start_theta和obs_end_theta, interval=1
+    // start_theta和obs_end_theta, interval=0.2
+    double max_rate = 12.0;
+    double max_delta_theta = std::max(std::fabs(obs_end_theta - end_theta),
+      std::fabs(obs_start_theta - start_theta));
+    double a = (max_rate - 1.0) / (max_delta_theta * max_delta_theta);
+    // std::cout << a << std::endl;
+    double rate = a * dist * dist + 1.0;
+    std::cout << rate << "," << interval << "," << rate * interval << std::endl;
+    return rate * interval;
+  }
+  return interval;
 }
 
 void Obstacle::DPForward(Mpcc& mpcc, const Resample& referenceline,

@@ -12,15 +12,15 @@ void Mpcc::chance_constrains_set(std::vector<double>& coeff, std::vector<double>
   double z_alpha = normsinv(1 - alpha / horizon);
   double S_x = 0.4;
   double S_y = 0.1;
-  double r_box_x = 0.1;
-  double r_box_y = 0.5;
+  double r_box_x = config.obs_x_r;
+  double r_box_y = config.obs_y_r;
   
   // chance constrains 等式左右除以2，统一kesi为-1.0
   double denom_x = 2 * std::pow(r_box_x + z_alpha * S_x, 2);
   double denom_y = 2 * std::pow(r_box_y + z_alpha * S_y, 2);
-  // 不用chance cobstrains, 将denom_x denom_y设为椭圆半径平方
-  denom_x = config.obs_x_r * config.obs_x_r;
-  denom_y = config.obs_y_r * config.obs_y_r;
+  // // 不用chance cobstrains, 将denom_x denom_y设为椭圆半径平方
+  // denom_x = config.obs_x_r * config.obs_x_r;
+  // denom_y = config.obs_y_r * config.obs_y_r;
 
   double x0 = obst[0];
   double y0 = obst[1];

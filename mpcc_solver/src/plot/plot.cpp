@@ -34,12 +34,12 @@ void Plot::plot(const Map& map, const Search& search, const Smooth& smooth,
   plt::plot(xi, yi, option3.color_ + option3.line_);
 
   // 搜索
-  Option option4(color_map[Green], line_map[Eight]);
+  Option option4(color_map[Yellow], line_map[Eight]);
   plt::named_plot("search", search.result_x, search.result_y,
                   option4.color_ + option4.line_);
 
   // 平滑
-  Option option5(color_map[Cyan], line_map[Nine]);
+  Option option5(color_map[Blue], line_map[Nine]);
   plt::named_plot("smooth", smooth.result_x, smooth.result_y, option5.color_ + option5.line_);
 
   // 拟合 重采样

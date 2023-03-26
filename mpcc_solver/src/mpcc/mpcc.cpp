@@ -3,7 +3,8 @@
 
 #include "mpcc.h"
 
-Mpcc::Mpcc() {
+Mpcc::Mpcc(const Config& config) {
+  horizon = config.horizon;
   Q.resize(horizon * state_dim_, horizon * state_dim_);
   identity.resize(horizon * state_dim_, horizon * state_dim_);
   for (int i = 0; i < horizon * state_dim_; i++) {
@@ -88,6 +89,7 @@ void Mpcc::UpdateState(const Resample& referenceline,
     now_theta += max_theta_;
   }
   state.coeffRef(state_dim_ - 1, 0) = now_theta;
+  // std::cout << "lkjkl:" << now_theta << std::endl;
 }
 
 void Mpcc::RecedeOneHorizon(const Resample& referenceline) {
@@ -112,9 +114,9 @@ void Mpcc::RecedeOneHorizon(const Resample& referenceline) {
     stage[i] = stage[i + 1];
   }
   stage[horizon - 1] = new_stage;
-  for (int i = 0;i<horizon;i++){
-    // std::cout <<"scscsc:" << optimal_theta[i] << std::endl;
-  }
+  // for (int i = 0;i<horizon;i++){
+  //   std::cout <<"scscsc:" << optimal_theta[i] << std::endl;
+  // }
   // std::cout <<optimal_theta[horizon - 1] << "," << stage[horizon - 1].state[4] << std::endl;
   // std::cout << std::endl;
 }
@@ -398,6 +400,7 @@ void Mpcc::SolveQp(const Resample& referenceline, const Map& map, const Config& 
       theta_x_.emplace_back(pos(0));
       theta_y_.emplace_back(pos(1));
     }
+    // std::cout << std::endl;
   } else {
     // 无解, 就用上一帧结果
     output_index++;

@@ -32,7 +32,7 @@ class Mpcc {
   int state_dim_ = 5;
   // ax ay az v_theta
   int control_dim_ = 3;
-  int horizon = 30;
+  int horizon;
   bool init_status = true;
   double Ts = 0.02;
   double max_theta_;
@@ -89,7 +89,7 @@ class Mpcc {
 
   int output_index = 0;
 
-  Mpcc();
+  Mpcc(const Config& config);
   void Init(const Resample& referenceline, Eigen::SparseMatrix<double> state,
       const Config& config);
   void UpdateState(const Resample& referenceline, Eigen::SparseMatrix<double>& state);

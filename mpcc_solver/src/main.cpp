@@ -34,12 +34,12 @@ geometry_msgs::Point pt;
 visualization_msgs::Marker drone_msg;
 visualization_msgs::Marker theta_msg;
 
+ros::Time last_odom_time;
+
 int main(int argc, char** argv) {
   ros::init(argc, argv, "mpcc_node");
   ros::NodeHandle n;
   ros::NodeHandle nh("~");
-
-  ros::Rate rate(50);
 
   ros::Subscriber sub_odom = n.subscribe("odom", 100, odom_callback, ros::TransportHints().tcpNoDelay());
   refer_pub = n.advertise<nav_msgs::Path>("refer_path", 1);
@@ -70,14 +70,16 @@ int main(int argc, char** argv) {
   Search search;
   Smooth smooth;
   Resample resample;
-  Mpcc mpcc;
   Obstacle obstacle;
   Plot plot;
   Config config(nh);
+  Mpcc mpcc(config);
+
+  ros::Rate rate(config.ctrl_rate);
 
   // 生成pcd地图，覆盖掉原始pcd
   if (config.generate_pcd_map_flag) {
-    GenerateMap(config, obstacle);
+    GenerateMap(config, mpcc);
   }
   
   // 1. gernerate map
@@ -123,14 +125,27 @@ int main(int argc, char** argv) {
   
   ros::spinOnce();
   if (config.enable_dp_flag) {
+    ros::Time dp_start_time = ros::Time::now();
     obstacle.Update(resample, map, mpcc, state, config);
+    double dp_time = (ros::Time::now() - dp_start_time).toSec();
+    std::cout << "dp time : " << dp_time << std::endl;
   }
   mpcc.UpdateState(resample, state);
   mpcc.Init(resample, state, config);
 
+  int i = 0;
   while (ros::ok()) {
+    i++;
+    ros::Time mpcc_start_time = ros::Time::now();
     ros::spinOnce();
+    rate.sleep();
     mpcc.UpdateState(resample, state);
+
+    if ((ros::Time::now() - last_odom_time).toSec() > 0.1) {
+      mpcc.mpcc_valid_flag_ = false;
+    } else {
+      mpcc.mpcc_valid_flag_ = true;
+    }
 
     // 检查是否在走廊范围内
     bool in_corridor_range = mpcc.InCorridorRange(map, state.coeffRef(0, 0), state.coeffRef(2, 0));
@@ -147,22 +162,26 @@ int main(int argc, char** argv) {
         mpcc.mpcc_valid_flag_ = true;
       }
     }
-
+    // ros::Time qp_start_time = ros::Time::now();
     mpcc.SolveQp(resample, map, config, state);
+    // double qp_time = (ros::Time::now() - qp_start_time).toSec();
 
     mpcc.x_history.emplace_back(state.coeffRef(0, 0));
     mpcc.y_history.emplace_back(state.coeffRef(2, 0));
     publish_topic(mpcc, resample);
+    
+    double mpcc_time = (ros::Time::now() - mpcc_start_time).toSec();
+    if (i % 10 == 0) {
+      std::cout << "mpcc time  : " << mpcc_time << std::endl;
+      // std::cout << "qp time : " << qp_time << std::endl;
+    }
   }
   plot.plot(map, search, smooth, resample, mpcc, obstacle);
   return 0;
 }
 
 void odom_callback(const nav_msgs::Odometry& odom){
-  // TODO odom valid
-  // odomT = (odom.header.stamp - tOdom).toSec();
-  // tOdom = odom.header.stamp;
-
+  last_odom_time = ros::Time::now();
   state.coeffRef(0, 0) = odom.pose.pose.position.x;
   state.coeffRef(1, 0) = odom.twist.twist.linear.x;
   state.coeffRef(2, 0) = odom.pose.pose.position.y;

@@ -26,6 +26,8 @@ class Config {
   bool obs_penalty_valid;
   bool generate_pcd_map_flag;
   bool enable_dp_flag;
+  int ctrl_rate;
+  int horizon;
 
   Config(const ros::NodeHandle& nh) {
     nh.getParam("theta_dot_upper_limit", theta_dot_upper_limit);
@@ -47,5 +49,7 @@ class Config {
     nh.getParam("generate_pcd_map_flag", generate_pcd_map_flag);
     nh.getParam("enable_dp_flag", enable_dp_flag);
     nh.getParam("dp_length_rate", dp_length_rate);
+    nh.getParam("ctrl_rate", ctrl_rate);
+    nh.getParam("horizon", horizon);
   }
 };

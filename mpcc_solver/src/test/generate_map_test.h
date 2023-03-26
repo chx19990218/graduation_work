@@ -4,9 +4,9 @@
 #include <fstream>
 #include <iostream>
 #include "map.h"
-#include "config.h"
+#include "mpcc.h"
 
-void GenerateMap(const Config& config, const Obstacle& obstacle) {
+void GenerateMap(const Config& config, const Mpcc& mpcc) {
   Map map;
   map.GenerateMap();
   std::ofstream flightlog;
@@ -39,10 +39,10 @@ void GenerateMap(const Config& config, const Obstacle& obstacle) {
     dot_count += inner_num;
   }
 
-  double x_l = std::min(obstacle.obstacle_pos_[0][0], obstacle.obstacle_pos_[2][0]);
-  double x_r = std::max(obstacle.obstacle_pos_[0][0], obstacle.obstacle_pos_[2][0]);
-  double y_l = std::min(obstacle.obstacle_pos_[0][1], obstacle.obstacle_pos_[2][1]);
-  double y_r = std::max(obstacle.obstacle_pos_[0][1], obstacle.obstacle_pos_[2][1]);
+  double x_l = std::min(mpcc.obstacle_pos_[0][0], mpcc.obstacle_pos_[2][0]);
+  double x_r = std::max(mpcc.obstacle_pos_[0][0], mpcc.obstacle_pos_[2][0]);
+  double y_l = std::min(mpcc.obstacle_pos_[0][1], mpcc.obstacle_pos_[2][1]);
+  double y_r = std::max(mpcc.obstacle_pos_[0][1], mpcc.obstacle_pos_[2][1]);
   for (double i = x_l; i <= x_r; i += interval) {
     for (double j = y_l; j <= y_r; j += interval) {
       dot_count++;
