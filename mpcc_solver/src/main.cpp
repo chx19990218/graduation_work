@@ -19,7 +19,7 @@
 #include <quadrotor_msgs/PositionCommand.h>
 
 void odom_callback(const nav_msgs::Odometry& odom);
-void publish_topic(Mpcc& mpcc, const Resample& resample);
+void publish_topic(Mpcc& mpcc, const Resample& resample, const Config& config);
 
 Eigen::SparseMatrix<double> state(5, 1);
 ros::Time tOdom;
@@ -168,7 +168,7 @@ int main(int argc, char** argv) {
 
     mpcc.x_history.emplace_back(state.coeffRef(0, 0));
     mpcc.y_history.emplace_back(state.coeffRef(2, 0));
-    publish_topic(mpcc, resample);
+    publish_topic(mpcc, resample, config);
     
     double mpcc_time = (ros::Time::now() - mpcc_start_time).toSec();
     if (i % 10 == 0) {
@@ -176,7 +176,9 @@ int main(int argc, char** argv) {
       // std::cout << "qp time : " << qp_time << std::endl;
     }
   }
-  plot.plot(map, search, smooth, resample, mpcc, obstacle);
+  if (config.simulation_flag) {
+    plot.plot(map, search, smooth, resample, mpcc, obstacle);
+  }
   return 0;
 }
 
@@ -188,72 +190,74 @@ void odom_callback(const nav_msgs::Odometry& odom){
   state.coeffRef(3, 0) = odom.twist.twist.linear.y;
 }
 
-void publish_topic(Mpcc& mpcc, const Resample& resample) {
+void publish_topic(Mpcc& mpcc, const Resample& resample, const Config& config) {
   // 控制指令
   cmd_pub.publish(mpcc.cmdMsg);
 
-  // rviz 无人机箭头
-  drone_msg.points.clear();
-  pt.x = state.coeffRef(0,0);
-  pt.y = state.coeffRef(2,0);
-  pt.z = 0.0;
-  drone_msg.points.push_back(pt);
-  pt.x += state.coeffRef(1,0) / 2.0;
-  pt.y += state.coeffRef(3,0) / 2.0;
-  pt.z += 0.0;
-  drone_msg.points.push_back(pt);
-  drone_pub.publish(drone_msg);
-
-  // mpcc无效时，向state的theta点走
-  if (mpcc.mpcc_valid_flag_) {
-    // rviz 预测轨迹
-    trajPred_msg.poses.resize(mpcc.horizon);
-    for (int i = 0; i < mpcc.horizon; i++) {
-      tmpPose.pose.position.x = mpcc.statePredict.coeffRef(0, i);
-      tmpPose.pose.position.y = mpcc.statePredict.coeffRef(2, i);
-      tmpPose.pose.position.z = 0.0;
-      trajPred_msg.poses[i] = tmpPose;
-    }
-    predict_pub.publish(trajPred_msg);
-
-    // rviz theta预测轨迹
-    theta_trajPred_msg.poses.resize(mpcc.horizon);
-    for (int i = 0; i < mpcc.horizon; i++) {
-      auto pos_theta = resample.spline.getPostion(mpcc.statePredict.coeffRef(4, i));
-      tmpPose.pose.position.x = pos_theta(0);
-      tmpPose.pose.position.y = pos_theta(1);
-      tmpPose.pose.position.z = 0.1;
-      theta_trajPred_msg.poses[i] = tmpPose;
-    }
-    theta_predict_pub.publish(theta_trajPred_msg);
-
-    // rviz theta箭头
-    theta_msg.points.clear();
-    auto pos = resample.spline.getPostion(state.coeffRef(4,0));
-    pt.x = pos(0);
-    pt.y = pos(1);
-    pt.z = 0.0;
-    theta_msg.points.push_back(pt);
-    auto vel = resample.spline.getDerivative(state.coeffRef(4,0));
-    vel(0) /= sqrt(vel(0) * vel(0) + vel(1) * vel(1));
-    vel(1) /= sqrt(vel(0) * vel(0) + vel(1) * vel(1));
-    pt.x += vel(0);
-    pt.y += vel(1);
-    pt.z += 0.0;
-    theta_msg.points.push_back(pt);
-    theta_pub.publish(theta_msg);
-  } else {
-    // rviz theta箭头
-    theta_msg.points.clear();
+  if (config.simulation_flag) {
+    // rviz 无人机箭头
+    drone_msg.points.clear();
     pt.x = state.coeffRef(0,0);
     pt.y = state.coeffRef(2,0);
     pt.z = 0.0;
-    theta_msg.points.push_back(pt);
-    auto pos = resample.spline.getPostion(state.coeffRef(4,0));
-    pt.x = pos(0);
-    pt.y = pos(1);
-    pt.z = 0.0;
-    theta_msg.points.push_back(pt);
-    theta_pub.publish(theta_msg);
+    drone_msg.points.push_back(pt);
+    pt.x += state.coeffRef(1,0) / 2.0;
+    pt.y += state.coeffRef(3,0) / 2.0;
+    pt.z += 0.0;
+    drone_msg.points.push_back(pt);
+    drone_pub.publish(drone_msg);
+
+    // mpcc无效时，向state的theta点走
+    if (mpcc.mpcc_valid_flag_) {
+      // rviz 预测轨迹
+      trajPred_msg.poses.resize(mpcc.horizon);
+      for (int i = 0; i < mpcc.horizon; i++) {
+        tmpPose.pose.position.x = mpcc.statePredict.coeffRef(0, i);
+        tmpPose.pose.position.y = mpcc.statePredict.coeffRef(2, i);
+        tmpPose.pose.position.z = 0.0;
+        trajPred_msg.poses[i] = tmpPose;
+      }
+      predict_pub.publish(trajPred_msg);
+
+      // rviz theta预测轨迹
+      theta_trajPred_msg.poses.resize(mpcc.horizon);
+      for (int i = 0; i < mpcc.horizon; i++) {
+        auto pos_theta = resample.spline.getPostion(mpcc.statePredict.coeffRef(4, i));
+        tmpPose.pose.position.x = pos_theta(0);
+        tmpPose.pose.position.y = pos_theta(1);
+        tmpPose.pose.position.z = 0.1;
+        theta_trajPred_msg.poses[i] = tmpPose;
+      }
+      theta_predict_pub.publish(theta_trajPred_msg);
+
+      // rviz theta箭头
+      theta_msg.points.clear();
+      auto pos = resample.spline.getPostion(state.coeffRef(4,0));
+      pt.x = pos(0);
+      pt.y = pos(1);
+      pt.z = 0.0;
+      theta_msg.points.push_back(pt);
+      auto vel = resample.spline.getDerivative(state.coeffRef(4,0));
+      vel(0) /= sqrt(vel(0) * vel(0) + vel(1) * vel(1));
+      vel(1) /= sqrt(vel(0) * vel(0) + vel(1) * vel(1));
+      pt.x += vel(0);
+      pt.y += vel(1);
+      pt.z += 0.0;
+      theta_msg.points.push_back(pt);
+      theta_pub.publish(theta_msg);
+    } else {
+      // rviz theta箭头
+      theta_msg.points.clear();
+      pt.x = state.coeffRef(0,0);
+      pt.y = state.coeffRef(2,0);
+      pt.z = 0.0;
+      theta_msg.points.push_back(pt);
+      auto pos = resample.spline.getPostion(state.coeffRef(4,0));
+      pt.x = pos(0);
+      pt.y = pos(1);
+      pt.z = 0.0;
+      theta_msg.points.push_back(pt);
+      theta_pub.publish(theta_msg);
+    }
   }
 }

@@ -140,7 +140,7 @@ double Obstacle::DynamicInterval(double theta, double interval,
     double a = (max_rate - 1.0) / (max_delta_theta * max_delta_theta);
     // std::cout << a << std::endl;
     double rate = a * dist * dist + 1.0;
-    std::cout << rate << "," << interval << "," << rate * interval << std::endl;
+    // std::cout << rate << "," << interval << "," << rate * interval << std::endl;
     return rate * interval;
   }
   return interval;

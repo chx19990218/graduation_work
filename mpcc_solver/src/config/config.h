@@ -26,6 +26,7 @@ class Config {
   bool obs_penalty_valid;
   bool generate_pcd_map_flag;
   bool enable_dp_flag;
+  bool simulation_flag;
   int ctrl_rate;
   int horizon;
 
@@ -51,5 +52,6 @@ class Config {
     nh.getParam("dp_length_rate", dp_length_rate);
     nh.getParam("ctrl_rate", ctrl_rate);
     nh.getParam("horizon", horizon);
+    nh.getParam("simulation_flag", simulation_flag);
   }
 };
