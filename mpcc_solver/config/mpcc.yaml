@@ -2,16 +2,16 @@ ctrl_rate : 50
 simulation_flag : true
 
 # constrains
-theta_dot_upper_limit : 5.0
+theta_dot_upper_limit : 3.0
 angle_upper_limit : 30.0  # deg
 
 # mpcc
-horizon : 30
+horizon : 20
 end_gain_rate : 20.0 #ec, el param rate of end point 
 w_c : 1.0
 w_l : 20.0
-gamma : 7.0
-w_u : 0.01
+gamma : 10.0
+w_u : 0.007
 w_deltau : 0.001
 
 # reference line

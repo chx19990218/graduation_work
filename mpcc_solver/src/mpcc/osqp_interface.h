@@ -4,6 +4,7 @@
 #pragma once
 
 #include <osqp/osqp.h>
+#include <iostream>
 
 #include <eigen3/Eigen/Dense>
 #include <eigen3/Eigen/Sparse>

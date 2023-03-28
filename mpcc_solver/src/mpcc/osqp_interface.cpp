@@ -49,6 +49,15 @@ int OSQPInterface::updateMatrices(
     data->u[i] = cupp_.coeffRef(i, 0);
   }
   if (settings) osqp_set_default_settings(settings);
+
+  // settings->polish = true;
+  // settings->scaled_termination = true;
+  // settings->verbose = false;
+  // std::cout << "settings->max_iter" << settings->max_iter << std::endl;
+  // std::cout << "eps_abs" << settings->eps_abs << std::endl;
+  // settings->max_iter = 150;
+  // settings->eps_abs = 0.01;
+
   settings->warm_start = warmStart;
   exitflag = osqp_setup(&work, data, settings);
   delete data->q;

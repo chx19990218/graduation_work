@@ -241,18 +241,25 @@ void Mpcc::CalculateCost(const Resample& referenceline, const Config& config,
   Eigen::MatrixXd Q_deltau = 2.0 * Eigen::MatrixXd::Identity(control_dim_ * horizon, control_dim_ * horizon);
   Q_deltau.coeffRef(0, 0) = 1.0;
   Q_deltau.coeffRef(1, 1) = 1.0;
+  Q_deltau.coeffRef(2, 2) = 1.0;
+  Q_deltau.coeffRef(control_dim_ * horizon - 3, control_dim_ * horizon - 3) = 1.0;
   Q_deltau.coeffRef(control_dim_ * horizon - 2, control_dim_ * horizon - 2) = 1.0;
   Q_deltau.coeffRef(control_dim_ * horizon - 1, control_dim_ * horizon - 1) = 1.0;
-  for (int i = 0; i < control_dim_ * horizon - 2; i++) {
-    Q_deltau.coeffRef(i, i + 2) = -2.0;
+  for (int i = 0; i < control_dim_ * horizon - 3; i++) {
+    // H要对称正定
+    Q_deltau.coeffRef(i, i + 3) = -1.0;
+    Q_deltau.coeffRef(i + 3, i) = -1.0;
+  }
+  Eigen::MatrixXd Q_u = Eigen::MatrixXd::Identity(control_dim_ * horizon, control_dim_ * horizon);
+  for (int i = 0; i < horizon; i++) {
+    Q_u.coeffRef(i * control_dim_ + 2, i * control_dim_ + 2) = 0.0;
   }
 
   Eigen::SparseMatrix<double> progress(control_dim_ * horizon, 1);
   for (int i = 0; i < horizon; i++) {
     progress.coeffRef(control_dim_ * i + control_dim_ - 1, 0) = gamma * Ts;
   }
-  H = BBT * Q * BB  + w_deltau * Q_deltau
-    + w_u * Eigen::MatrixXd::Identity(control_dim_ * horizon, control_dim_ * horizon);
+  H = BBT * Q * BB + w_u * Q_u + w_deltau * Q_deltau;
   f = BBT * Q * AA * state + BBT * q - progress;
 }
 

@@ -45,27 +45,27 @@ void Mpcc::SetConstrains(const Resample& referenceline, const Map& map,
   double max_a = 9.8 * std::tan(max_attitude);
   double max_v = config.theta_dot_upper_limit;
   for (int i = 0; i < horizon; i++) {
-    // x轴控制量上限
-    Eigen::SparseMatrix<double> Ck1(1, horizon * control_dim_);
-    Eigen::SparseMatrix<double> xupk1(1, 1);
-    Eigen::SparseMatrix<double> xlowk1(1, 1);
-    Ck1.coeffRef(0, i * control_dim_ + 0) = 1.0;
-    xupk1.coeffRef(0, 0) = max_a;
-    xlowk1.coeffRef(0, 0) = -max_a;
-    sp::colMajor::addRows(C, Ck1);
-    sp::colMajor::addRows(cupp, xupk1);
-    sp::colMajor::addRows(clow, xlowk1);
+    // // x轴控制量上限
+    // Eigen::SparseMatrix<double> Ck1(1, horizon * control_dim_);
+    // Eigen::SparseMatrix<double> xupk1(1, 1);
+    // Eigen::SparseMatrix<double> xlowk1(1, 1);
+    // Ck1.coeffRef(0, i * control_dim_ + 0) = 1.0;
+    // xupk1.coeffRef(0, 0) = max_a;
+    // xlowk1.coeffRef(0, 0) = -max_a;
+    // sp::colMajor::addRows(C, Ck1);
+    // sp::colMajor::addRows(cupp, xupk1);
+    // sp::colMajor::addRows(clow, xlowk1);
 
-    // y控制量上限
-    Eigen::SparseMatrix<double> Ck2(1, horizon * control_dim_);
-    Eigen::SparseMatrix<double> xupk2(1, 1);
-    Eigen::SparseMatrix<double> xlowk2(1, 1);
-    Ck2.coeffRef(0, i * control_dim_ + 1) = 1.0;
-    xupk2.coeffRef(0, 0) = max_a;
-    xlowk2.coeffRef(0, 0) = -max_a;
-    sp::colMajor::addRows(C, Ck2);
-    sp::colMajor::addRows(cupp, xupk2);
-    sp::colMajor::addRows(clow, xlowk2);
+    // // y控制量上限
+    // Eigen::SparseMatrix<double> Ck2(1, horizon * control_dim_);
+    // Eigen::SparseMatrix<double> xupk2(1, 1);
+    // Eigen::SparseMatrix<double> xlowk2(1, 1);
+    // Ck2.coeffRef(0, i * control_dim_ + 1) = 1.0;
+    // xupk2.coeffRef(0, 0) = max_a;
+    // xlowk2.coeffRef(0, 0) = -max_a;
+    // sp::colMajor::addRows(C, Ck2);
+    // sp::colMajor::addRows(cupp, xupk2);
+    // sp::colMajor::addRows(clow, xlowk2);
 
     // theta控制量上限
     Eigen::SparseMatrix<double> Ck3(1, horizon * control_dim_);
