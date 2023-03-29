@@ -6,13 +6,13 @@ theta_dot_upper_limit : 3.0
 angle_upper_limit : 30.0  # deg
 
 # mpcc
-horizon : 20
+horizon : 30
 end_gain_rate : 20.0 #ec, el param rate of end point 
 w_c : 1.0
 w_l : 20.0
 gamma : 10.0
-w_u : 0.007
-w_deltau : 0.001
+w_u : 0.02
+w_deltau : 0.0001
 
 # reference line
 N_SPLINE : 5000

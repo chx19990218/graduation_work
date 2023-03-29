@@ -14,7 +14,6 @@ void Mpcc::SetConstrains(const Resample& referenceline, const Map& map,
   Cx.resize(horizon, state_dim_ * horizon);
   xup.resize(horizon, 1);
   xlow.resize(horizon, 1);
-
   for (int i = 0; i < horizon; i++) {
     double x = stage[i].state[0];
     double y = stage[i].state[2];
@@ -36,65 +35,67 @@ void Mpcc::SetConstrains(const Resample& referenceline, const Map& map,
   // 速度限制
   // TODO
 
-  C = Eigen::SparseMatrix<double>(Cx * BB);
-  cupp = xup - Eigen::SparseMatrix<double>(Cx * AA * state);
-  clow = xlow - Eigen::SparseMatrix<double>(Cx * AA * state);
+  // addRows 耗时很大，换种方式定义
+  Eigen::SparseMatrix<double> C_temp = Eigen::SparseMatrix<double>(Cx * BB);
+  Eigen::SparseMatrix<double> cupp_temp = xup - Eigen::SparseMatrix<double>(Cx * AA * state);
+  Eigen::SparseMatrix<double> clow_temp = xlow - Eigen::SparseMatrix<double>(Cx * AA * state);
+
+  C.resize(C_temp.rows() + 3 * horizon, C_temp.cols());
+  cupp.resize(cupp_temp.rows() + 3 * horizon, 1);
+  clow.resize(clow_temp.rows() + 3 * horizon, 1);
+
+  sp::colMajor::setBlock(C, C_temp, 0, 0);
+  sp::colMajor::setBlock(cupp, cupp_temp, 0, 0);
+  sp::colMajor::setBlock(clow, clow_temp, 0, 0);
 
   // 加速度/角度,里程速度限制限制
   double max_attitude = config.angle_upper_limit * PI / 180.0;
   double max_a = 9.8 * std::tan(max_attitude);
   double max_v = config.theta_dot_upper_limit;
   for (int i = 0; i < horizon; i++) {
-    // // x轴控制量上限
-    // Eigen::SparseMatrix<double> Ck1(1, horizon * control_dim_);
-    // Eigen::SparseMatrix<double> xupk1(1, 1);
-    // Eigen::SparseMatrix<double> xlowk1(1, 1);
-    // Ck1.coeffRef(0, i * control_dim_ + 0) = 1.0;
-    // xupk1.coeffRef(0, 0) = max_a;
-    // xlowk1.coeffRef(0, 0) = -max_a;
-    // sp::colMajor::addRows(C, Ck1);
-    // sp::colMajor::addRows(cupp, xupk1);
-    // sp::colMajor::addRows(clow, xlowk1);
+    // x轴控制量上限
+    C.coeffRef(C_temp.rows() + i, i * control_dim_ + 0) = 1.0;
+    cupp.coeffRef(cupp_temp.rows() + i, 0) = max_a;
+    clow.coeffRef(clow_temp.rows() + i, 0) = -max_a;
 
-    // // y控制量上限
-    // Eigen::SparseMatrix<double> Ck2(1, horizon * control_dim_);
-    // Eigen::SparseMatrix<double> xupk2(1, 1);
-    // Eigen::SparseMatrix<double> xlowk2(1, 1);
-    // Ck2.coeffRef(0, i * control_dim_ + 1) = 1.0;
-    // xupk2.coeffRef(0, 0) = max_a;
-    // xlowk2.coeffRef(0, 0) = -max_a;
-    // sp::colMajor::addRows(C, Ck2);
-    // sp::colMajor::addRows(cupp, xupk2);
-    // sp::colMajor::addRows(clow, xlowk2);
+    // y控制量上限
+    C.coeffRef(C_temp.rows() + horizon + i, i * control_dim_ + 1) = 1.0;
+    cupp.coeffRef(cupp_temp.rows() + horizon + i, 0) = max_a;
+    clow.coeffRef(clow_temp.rows() + horizon + i, 0) = -max_a;
 
     // theta控制量上限
-    Eigen::SparseMatrix<double> Ck3(1, horizon * control_dim_);
-    Eigen::SparseMatrix<double> xupk3(1, 1);
-    Eigen::SparseMatrix<double> xlowk3(1, 1);
-    Ck3.coeffRef(0, i * control_dim_ + control_dim_ - 1) = 1.0;
-    xupk3.coeffRef(0, 0) = max_v;
-    xlowk3.coeffRef(0, 0) = 0.0;
-    sp::colMajor::addRows(C, Ck3);
-    sp::colMajor::addRows(cupp, xupk3);
-    sp::colMajor::addRows(clow, xlowk3);
+    C.coeffRef(C_temp.rows() + 2 * horizon + i, i * control_dim_ + control_dim_ - 1) = 1.0;
+    cupp.coeffRef(cupp_temp.rows() + 2 * horizon + i, 0) = max_v;
+    clow.coeffRef(clow_temp.rows() + 2 * horizon + i, 0) = 0.0;
   }
 }
 
 std::vector<double> Mpcc::GetPointBorderConstrain(const Map& map, double x,
                                                   double y, const Resample& referenceline,
                                                   const Config& config) {
-  double horizon_dist = horizon * config.theta_dot_upper_limit * Ts + 0.1;
-  double obs_size = std::max(std::fabs(obstacle_pos_[0][0] - obstacle_pos_[2][0]),
-    std::fabs(obstacle_pos_[0][1] - obstacle_pos_[2][1]));
-  double now_theta = referenceline.spline.porjectOnSpline(x, y);
-  double obs_x = (obstacle_pos_[0][0] + obstacle_pos_[2][0]) / 2.0;
-  double obs_y = (obstacle_pos_[0][1] + obstacle_pos_[2][1]) / 2.0;
-  double obs_theta = referenceline.spline.porjectOnSpline(obs_x, obs_y);
-  bool get_into_obstacle_flag = std::fabs(obs_theta - now_theta) <
-    std::max(horizon_dist * config.dp_length_rate, obs_size);
+  
   int stage_index = GetStage(map, x, y);
   std::vector<double> res(4);
   if (stage_index >= 0) {
+    // 把判断是否在障碍范围内提出来，dp关掉就不计算
+    bool get_into_obstacle_flag = false;
+    if (config.enable_dp_flag) {
+      double horizon_dist = horizon * config.theta_dot_upper_limit * Ts + 0.1;
+      double obs_y = (obstacle_pos_[0][1] + obstacle_pos_[2][1]) / 2.0;
+      get_into_obstacle_flag = y < obs_y + horizon_dist * config.dp_length_rate &&
+        y > obs_y - horizon_dist * config.dp_length_rate;
+
+      // projection操作耗时很大
+      // double obs_size = std::max(std::fabs(obstacle_pos_[0][0] - obstacle_pos_[2][0]),
+      //   std::fabs(obstacle_pos_[0][1] - obstacle_pos_[2][1]));
+      // double now_theta = referenceline.spline.porjectOnSpline(x, y);
+      // double obs_x = (obstacle_pos_[0][0] + obstacle_pos_[2][0]) / 2.0;
+      // double obs_y = (obstacle_pos_[0][1] + obstacle_pos_[2][1]) / 2.0;
+      // double obs_theta = referenceline.spline.porjectOnSpline(obs_x, obs_y);
+      // get_into_obstacle_flag = std::fabs(obs_theta - now_theta) <
+      //   std::max(horizon_dist * config.dp_length_rate, obs_size);
+    }
+
     if (config.enable_dp_flag && get_into_obstacle_flag) {// 进入障碍区
       res = GetBorder(x, y);
     } else { // 没进入障碍区
@@ -128,6 +129,11 @@ std::vector<double> Mpcc::GetPointBorderConstrain(const Map& map, double x,
       res[2] = inner_vertical_point[0];
       res[3] = inner_vertical_point[1];
     }
+  } else {
+    res[0] = 100000;
+    res[1] = 100000;
+    res[2] = -100000;
+    res[3] = -100000;
   }
   return res;
 }

@@ -49,6 +49,27 @@ Mpcc::Mpcc(const Config& config) {
   BBT = BB.transpose();
   inputPredict.resize(control_dim_, horizon);
   statePredict.resize(state_dim_, horizon);
+
+  Q_deltau = 2.0 * Eigen::MatrixXd::Identity(control_dim_ * horizon, control_dim_ * horizon);
+  Q_deltau.coeffRef(0, 0) = 1.0;
+  Q_deltau.coeffRef(1, 1) = 1.0;
+  Q_deltau.coeffRef(2, 2) = 1.0;
+  Q_deltau.coeffRef(control_dim_ * horizon - 3, control_dim_ * horizon - 3) = 1.0;
+  Q_deltau.coeffRef(control_dim_ * horizon - 2, control_dim_ * horizon - 2) = 1.0;
+  Q_deltau.coeffRef(control_dim_ * horizon - 1, control_dim_ * horizon - 1) = 1.0;
+  for (int i = 0; i < control_dim_ * horizon - 3; i++) {
+    // H要对称正定
+    Q_deltau.coeffRef(i, i + 3) = -1.0;
+    Q_deltau.coeffRef(i + 3, i) = -1.0;
+  }
+  Q_u = Eigen::MatrixXd::Identity(control_dim_ * horizon, control_dim_ * horizon);
+  for (int i = 0; i < horizon; i++) {
+    Q_u.coeffRef(i * control_dim_ + 2, i * control_dim_ + 2) = 0.0;
+  }
+  progress.resize(control_dim_ * horizon, 1);
+  for (int i = 0; i < horizon; i++) {
+    progress.coeffRef(control_dim_ * i + control_dim_ - 1, 0) = Ts;
+  }
 }
 
 void Mpcc::Init(const Resample& referenceline, Eigen::SparseMatrix<double> state,
@@ -238,29 +259,8 @@ void Mpcc::CalculateCost(const Resample& referenceline, const Config& config,
     sp::colMajor::setBlock(q, qn, state_dim_ * i, 0);
   }
 
-  Eigen::MatrixXd Q_deltau = 2.0 * Eigen::MatrixXd::Identity(control_dim_ * horizon, control_dim_ * horizon);
-  Q_deltau.coeffRef(0, 0) = 1.0;
-  Q_deltau.coeffRef(1, 1) = 1.0;
-  Q_deltau.coeffRef(2, 2) = 1.0;
-  Q_deltau.coeffRef(control_dim_ * horizon - 3, control_dim_ * horizon - 3) = 1.0;
-  Q_deltau.coeffRef(control_dim_ * horizon - 2, control_dim_ * horizon - 2) = 1.0;
-  Q_deltau.coeffRef(control_dim_ * horizon - 1, control_dim_ * horizon - 1) = 1.0;
-  for (int i = 0; i < control_dim_ * horizon - 3; i++) {
-    // H要对称正定
-    Q_deltau.coeffRef(i, i + 3) = -1.0;
-    Q_deltau.coeffRef(i + 3, i) = -1.0;
-  }
-  Eigen::MatrixXd Q_u = Eigen::MatrixXd::Identity(control_dim_ * horizon, control_dim_ * horizon);
-  for (int i = 0; i < horizon; i++) {
-    Q_u.coeffRef(i * control_dim_ + 2, i * control_dim_ + 2) = 0.0;
-  }
-
-  Eigen::SparseMatrix<double> progress(control_dim_ * horizon, 1);
-  for (int i = 0; i < horizon; i++) {
-    progress.coeffRef(control_dim_ * i + control_dim_ - 1, 0) = gamma * Ts;
-  }
   H = BBT * Q * BB + w_u * Q_u + w_deltau * Q_deltau;
-  f = BBT * Q * AA * state + BBT * q - progress;
+  f = BBT * Q * AA * state + BBT * q - gamma * progress;
 }
 
 void Mpcc::GetRefPoint(const Resample& referenceline, const double s,
@@ -344,6 +344,7 @@ void Mpcc::SolveQp(const Resample& referenceline, const Map& map, const Config& 
     Eigen::SparseMatrix<double> state) {
   geometry_msgs::Point tmpPoint;
   geometry_msgs::Vector3 tmpVector;
+  
   if (!mpcc_valid_flag_) {
     output_index = 0;
     auto pos_theta = referenceline.spline.getPostion(state.coeffRef(4, 0));
@@ -362,17 +363,17 @@ void Mpcc::SolveQp(const Resample& referenceline, const Map& map, const Config& 
     cmdMsg.header.stamp = ros::Time::now();
     return;
   }
+  // 更新一步
   RecedeOneHorizon(referenceline);
-  
+  // 设置约束
   SetConstrains(referenceline, map, state, config);
-  
+  // 设置QP矩阵
   CalculateCost(referenceline, config, state);
-
+  // 更新QP矩阵
   osqpInterface.updateMatrices(H, f, A, b, C, clow, cupp, ul, uu);
+  // QP求解
   osqpInterface.solveQP();
-  
   auto solveStatus = osqpInterface.solveStatus();
-  
   auto solPtr = osqpInterface.solPtr();
 
   if (solveStatus == OSQP_SOLVED) {

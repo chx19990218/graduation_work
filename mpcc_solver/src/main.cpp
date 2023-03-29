@@ -135,8 +135,8 @@ int main(int argc, char** argv) {
 
   int i = 0;
   while (ros::ok()) {
-    i++;
     ros::Time mpcc_start_time = ros::Time::now();
+    i++;
     ros::spinOnce();
     rate.sleep();
     mpcc.UpdateState(resample, state);
@@ -146,13 +146,14 @@ int main(int argc, char** argv) {
     } else {
       mpcc.mpcc_valid_flag_ = true;
     }
-
+    
     // 检查是否在走廊范围内
     bool in_corridor_range = mpcc.InCorridorRange(map, state.coeffRef(0, 0), state.coeffRef(2, 0));
     if (!in_corridor_range) {
       // 不在范围内立即停用mpcc
       mpcc.mpcc_valid_flag_ = false;
     } else {
+      
       // 在范围内, 如果离参考线不远, 启用mpcc
       // 一旦启用，只有出范围 和 连续五帧无解 才会关掉
       auto pos_theta = resample.spline.getPostion(state.coeffRef(4, 0));
@@ -162,6 +163,7 @@ int main(int argc, char** argv) {
         mpcc.mpcc_valid_flag_ = true;
       }
     }
+    
     // ros::Time qp_start_time = ros::Time::now();
     mpcc.SolveQp(resample, map, config, state);
     // double qp_time = (ros::Time::now() - qp_start_time).toSec();

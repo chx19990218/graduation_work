@@ -63,9 +63,12 @@ class Mpcc {
   Eigen::SparseMatrix<double> Cx;
   Eigen::SparseMatrix<double> xup;
   Eigen::SparseMatrix<double> xlow;
+  Eigen::MatrixXd Q_deltau;
+  Eigen::MatrixXd Q_u;
 
   Eigen::SparseMatrix<double> inputPredict;
   Eigen::SparseMatrix<double> statePredict;
+  Eigen::SparseMatrix<double> progress;
 
   std::vector<double> optimal_theta = std::vector<double>(horizon);
 
