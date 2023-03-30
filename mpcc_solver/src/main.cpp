@@ -117,7 +117,7 @@ int main(int argc, char** argv) {
   for (int i = 0; i < resample.spline.path_data_.X.size(); i++) {
     tmpPose.pose.position.x = resample.spline.path_data_.X(i);
     tmpPose.pose.position.y = resample.spline.path_data_.Y(i);
-    tmpPose.pose.position.z = 0.0;
+    tmpPose.pose.position.z = config.hover_height;
     refTraj_msg.poses.push_back(tmpPose);
   }
   refer_pub.publish(refTraj_msg);
@@ -130,8 +130,6 @@ int main(int argc, char** argv) {
     double dp_time = (ros::Time::now() - dp_start_time).toSec();
     std::cout << "dp time : " << dp_time << std::endl;
   }
-  mpcc.UpdateState(resample, state);
-  mpcc.Init(resample, state, config);
 
   int i = 0;
   while (ros::ok()) {
@@ -153,7 +151,6 @@ int main(int argc, char** argv) {
       // 不在范围内立即停用mpcc
       mpcc.mpcc_valid_flag_ = false;
     } else {
-      
       // 在范围内, 如果离参考线不远, 启用mpcc
       // 一旦启用，只有出范围 和 连续五帧无解 才会关掉
       auto pos_theta = resample.spline.getPostion(state.coeffRef(4, 0));
@@ -161,6 +158,7 @@ int main(int argc, char** argv) {
         + std::pow(pos_theta(1) - state.coeffRef(2, 0), 2)) > config.mpcc_valid_dist;
       if (!mpcc.mpcc_valid_flag_ && !long_dist_with_refer_flag) {
         mpcc.mpcc_valid_flag_ = true;
+        mpcc.init_flag = true;
       }
     }
     
@@ -178,6 +176,7 @@ int main(int argc, char** argv) {
       // std::cout << "qp time : " << qp_time << std::endl;
     }
   }
+  // std::cout << "max_a : " << mpcc.max_cmd_a << std::endl;
   if (config.simulation_flag) {
     plot.plot(map, search, smooth, resample, mpcc, obstacle);
   }
@@ -201,7 +200,7 @@ void publish_topic(Mpcc& mpcc, const Resample& resample, const Config& config) {
     drone_msg.points.clear();
     pt.x = state.coeffRef(0,0);
     pt.y = state.coeffRef(2,0);
-    pt.z = 0.0;
+    pt.z = config.hover_height;
     drone_msg.points.push_back(pt);
     pt.x += state.coeffRef(1,0) / 2.0;
     pt.y += state.coeffRef(3,0) / 2.0;
@@ -216,7 +215,7 @@ void publish_topic(Mpcc& mpcc, const Resample& resample, const Config& config) {
       for (int i = 0; i < mpcc.horizon; i++) {
         tmpPose.pose.position.x = mpcc.statePredict.coeffRef(0, i);
         tmpPose.pose.position.y = mpcc.statePredict.coeffRef(2, i);
-        tmpPose.pose.position.z = 0.0;
+        tmpPose.pose.position.z = config.hover_height;
         trajPred_msg.poses[i] = tmpPose;
       }
       predict_pub.publish(trajPred_msg);
@@ -227,7 +226,7 @@ void publish_topic(Mpcc& mpcc, const Resample& resample, const Config& config) {
         auto pos_theta = resample.spline.getPostion(mpcc.statePredict.coeffRef(4, i));
         tmpPose.pose.position.x = pos_theta(0);
         tmpPose.pose.position.y = pos_theta(1);
-        tmpPose.pose.position.z = 0.1;
+        tmpPose.pose.position.z = config.hover_height + 0.1;
         theta_trajPred_msg.poses[i] = tmpPose;
       }
       theta_predict_pub.publish(theta_trajPred_msg);
@@ -237,7 +236,7 @@ void publish_topic(Mpcc& mpcc, const Resample& resample, const Config& config) {
       auto pos = resample.spline.getPostion(state.coeffRef(4,0));
       pt.x = pos(0);
       pt.y = pos(1);
-      pt.z = 0.0;
+      pt.z = config.hover_height;
       theta_msg.points.push_back(pt);
       auto vel = resample.spline.getDerivative(state.coeffRef(4,0));
       vel(0) /= sqrt(vel(0) * vel(0) + vel(1) * vel(1));
@@ -252,7 +251,7 @@ void publish_topic(Mpcc& mpcc, const Resample& resample, const Config& config) {
       theta_msg.points.clear();
       pt.x = state.coeffRef(0,0);
       pt.y = state.coeffRef(2,0);
-      pt.z = 0.0;
+      pt.z = config.hover_height;
       theta_msg.points.push_back(pt);
       auto pos = resample.spline.getPostion(state.coeffRef(4,0));
       pt.x = pos(0);

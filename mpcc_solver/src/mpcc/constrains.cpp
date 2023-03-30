@@ -40,9 +40,9 @@ void Mpcc::SetConstrains(const Resample& referenceline, const Map& map,
   Eigen::SparseMatrix<double> cupp_temp = xup - Eigen::SparseMatrix<double>(Cx * AA * state);
   Eigen::SparseMatrix<double> clow_temp = xlow - Eigen::SparseMatrix<double>(Cx * AA * state);
 
-  C.resize(C_temp.rows() + 3 * horizon, C_temp.cols());
-  cupp.resize(cupp_temp.rows() + 3 * horizon, 1);
-  clow.resize(clow_temp.rows() + 3 * horizon, 1);
+  C.resize(C_temp.rows() + horizon, C_temp.cols());
+  cupp.resize(cupp_temp.rows() + horizon, 1);
+  clow.resize(clow_temp.rows() + horizon, 1);
 
   sp::colMajor::setBlock(C, C_temp, 0, 0);
   sp::colMajor::setBlock(cupp, cupp_temp, 0, 0);
@@ -53,20 +53,20 @@ void Mpcc::SetConstrains(const Resample& referenceline, const Map& map,
   double max_a = 9.8 * std::tan(max_attitude);
   double max_v = config.theta_dot_upper_limit;
   for (int i = 0; i < horizon; i++) {
-    // x轴控制量上限
-    C.coeffRef(C_temp.rows() + i, i * control_dim_ + 0) = 1.0;
-    cupp.coeffRef(cupp_temp.rows() + i, 0) = max_a;
-    clow.coeffRef(clow_temp.rows() + i, 0) = -max_a;
+    // // x轴控制量上限
+    // C.coeffRef(C_temp.rows() + i, i * control_dim_ + 0) = 1.0;
+    // cupp.coeffRef(cupp_temp.rows() + i, 0) = max_a;
+    // clow.coeffRef(clow_temp.rows() + i, 0) = -max_a;
 
-    // y控制量上限
-    C.coeffRef(C_temp.rows() + horizon + i, i * control_dim_ + 1) = 1.0;
-    cupp.coeffRef(cupp_temp.rows() + horizon + i, 0) = max_a;
-    clow.coeffRef(clow_temp.rows() + horizon + i, 0) = -max_a;
+    // // y控制量上限
+    // C.coeffRef(C_temp.rows() + horizon + i, i * control_dim_ + 1) = 1.0;
+    // cupp.coeffRef(cupp_temp.rows() + horizon + i, 0) = max_a;
+    // clow.coeffRef(clow_temp.rows() + horizon + i, 0) = -max_a;
 
     // theta控制量上限
-    C.coeffRef(C_temp.rows() + 2 * horizon + i, i * control_dim_ + control_dim_ - 1) = 1.0;
-    cupp.coeffRef(cupp_temp.rows() + 2 * horizon + i, 0) = max_v;
-    clow.coeffRef(clow_temp.rows() + 2 * horizon + i, 0) = 0.0;
+    C.coeffRef(C_temp.rows() + i, i * control_dim_ + control_dim_ - 1) = 1.0;
+    cupp.coeffRef(cupp_temp.rows() + i, 0) = max_v;
+    clow.coeffRef(clow_temp.rows() + i, 0) = 0.0;
   }
 }
 

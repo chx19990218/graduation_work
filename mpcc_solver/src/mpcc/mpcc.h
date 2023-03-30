@@ -89,6 +89,8 @@ class Mpcc {
   quadrotor_msgs::PositionCommand cmdMsg;
 
   bool mpcc_valid_flag_ = false;
+  bool init_flag = true;
+  double max_cmd_a = 0.0;
 
   int output_index = 0;
 

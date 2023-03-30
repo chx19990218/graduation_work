@@ -22,6 +22,7 @@ class Config {
   double obs_x;
   double obs_y;
   double dp_length_rate;
+  double hover_height;
   int N_SPLINE;
   bool obs_penalty_valid;
   bool generate_pcd_map_flag;
@@ -53,5 +54,6 @@ class Config {
     nh.getParam("ctrl_rate", ctrl_rate);
     nh.getParam("horizon", horizon);
     nh.getParam("simulation_flag", simulation_flag);
+    nh.getParam("hover_height", hover_height);
   }
 };

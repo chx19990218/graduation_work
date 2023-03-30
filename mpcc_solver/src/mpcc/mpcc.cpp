@@ -74,25 +74,28 @@ Mpcc::Mpcc(const Config& config) {
 
 void Mpcc::Init(const Resample& referenceline, Eigen::SparseMatrix<double> state,
     const Config& config) {
-  max_theta_ = referenceline.spline.getLength(); 
-  optimal_theta.clear();
-  stage.clear();
-  // 初速度为0,初始轨迹为匀加速
-  double v = 0.8 * config.theta_dot_upper_limit;
-  double a = v / (Ts * horizon);
-  double x, y, theta;
-  for (int i = 0; i < horizon; i++) {
-    theta = std::fmod(state.coeffRef(state_dim_ - 1, 0) + a * i * i * Ts * Ts / 2, max_theta_);
-    auto pos_xy = referenceline.spline.getPostion(theta);
-    auto dpos_xy = referenceline.spline.getDerivative(theta);
-    double phi = atan2(dpos_xy(1), dpos_xy(0));
+  if (init_flag) {
+    max_theta_ = referenceline.spline.getLength(); 
+    optimal_theta.clear();
+    stage.clear();
+    // 初速度为0,初始轨迹为匀加速
+    double v = 0.8 * config.theta_dot_upper_limit;
+    double a = v / (Ts * horizon);
+    double x, y, theta;
+    for (int i = 0; i < horizon; i++) {
+      theta = state.coeffRef(state_dim_ - 1, 0) + a * i * i * Ts * Ts / 2;
+      auto pos_xy = referenceline.spline.getPostion(theta);
+      auto dpos_xy = referenceline.spline.getDerivative(theta);
+      double phi = atan2(dpos_xy(1), dpos_xy(0));
 
-    std::vector<double> new_state{pos_xy[0], std::cos(phi) * a * i * Ts,
-                                  pos_xy[1], std::sin(phi) * a * i * Ts, theta};
-    // std::cout << new_state[1] << "," << new_state[3] <<std::endl;
-    Stage stage_i(new_state);
-    stage.emplace_back(stage_i);
-    optimal_theta.emplace_back(theta);
+      std::vector<double> new_state{pos_xy[0], std::cos(phi) * a * i * Ts,
+                                    pos_xy[1], std::sin(phi) * a * i * Ts, theta};
+      // std::cout << new_state[1] << "," << new_state[3] <<std::endl;
+      Stage stage_i(new_state);
+      stage.emplace_back(stage_i);
+      optimal_theta.emplace_back(theta);
+    }
+    init_flag = false;
   }
 }
 
@@ -350,7 +353,7 @@ void Mpcc::SolveQp(const Resample& referenceline, const Map& map, const Config& 
     auto pos_theta = referenceline.spline.getPostion(state.coeffRef(4, 0));
     tmpPoint.x = pos_theta(0);
     tmpPoint.y = pos_theta(1);
-    tmpPoint.z = 0.0;
+    tmpPoint.z = config.hover_height;
     cmdMsg.position = tmpPoint;
     tmpVector.x = 0.0;
     tmpVector.y = 0.0;
@@ -363,6 +366,8 @@ void Mpcc::SolveQp(const Resample& referenceline, const Map& map, const Config& 
     cmdMsg.header.stamp = ros::Time::now();
     return;
   }
+  // 初始划轨迹
+  Init(referenceline, state, config);
   // 更新一步
   RecedeOneHorizon(referenceline);
   // 设置约束
@@ -407,6 +412,13 @@ void Mpcc::SolveQp(const Resample& referenceline, const Map& map, const Config& 
       auto pos = referenceline.spline.getPostion(statePredict.coeffRef(4, i));
       theta_x_.emplace_back(pos(0));
       theta_y_.emplace_back(pos(1));
+
+      // 安全检查
+      double max_a = 9.8 * std::tan(config.angle_upper_limit * PI / 180.0);
+      if (std::fabs(inputPredict.coeffRef(0, output_index)) > max_a ||
+          std::fabs(inputPredict.coeffRef(0, output_index)) > max_a) {
+        mpcc_valid_flag_ = false;
+      }
     }
     // std::cout << std::endl;
   } else {
@@ -423,7 +435,7 @@ void Mpcc::SolveQp(const Resample& referenceline, const Map& map, const Config& 
   // 控制指令
   tmpPoint.x = stage[output_index].state[0];
   tmpPoint.y = stage[output_index].state[2];
-  tmpPoint.z = 0.0;
+  tmpPoint.z = config.hover_height;
   cmdMsg.position = tmpPoint;
   tmpVector.x = stage[output_index].state[1];
   tmpVector.y = stage[output_index].state[3];
@@ -434,6 +446,8 @@ void Mpcc::SolveQp(const Resample& referenceline, const Map& map, const Config& 
   tmpVector.z = 0.0;
   cmdMsg.acceleration = tmpVector;
   cmdMsg.header.stamp = ros::Time::now();
+  // max_cmd_a = std::max({max_cmd_a, std::fabs(inputPredict.coeffRef(0, output_index)),
+  //   std::fabs(inputPredict.coeffRef(1, output_index))});
   // std::cout << output_index <<  std::endl;
 }
 

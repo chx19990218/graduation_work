@@ -3,10 +3,10 @@ simulation_flag : true
 
 # constrains
 theta_dot_upper_limit : 3.0
-angle_upper_limit : 30.0  # deg
+angle_upper_limit : 45.0  # deg
 
 # mpcc
-horizon : 30
+horizon : 25
 end_gain_rate : 20.0 #ec, el param rate of end point 
 w_c : 1.0
 w_l : 20.0
@@ -34,3 +34,5 @@ generate_pcd_map_flag : false
 # dp
 enable_dp_flag : false
 dp_length_rate : 0.25 # dp_length / 2 * horizon_dist
+
+hover_height : 1.0
