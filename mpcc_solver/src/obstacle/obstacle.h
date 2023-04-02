@@ -13,7 +13,7 @@
 
 class Obstacle {
  public:
-  int row_size = 15;
+  int row_size = 40;
   int col_size = 3;
   double dead_cost = 500.0;
   double similarity_weight = 1.0;

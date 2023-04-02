@@ -82,8 +82,11 @@ std::vector<double> Mpcc::GetPointBorderConstrain(const Map& map, double x,
     if (config.enable_dp_flag) {
       double horizon_dist = horizon * config.theta_dot_upper_limit * Ts + 0.1;
       double obs_y = (obstacle_pos_[0][1] + obstacle_pos_[2][1]) / 2.0;
+      double obs_x = (obstacle_pos_[0][0] + obstacle_pos_[2][0]) / 2.0;
+      double obs_x_r = std::fabs(obstacle_pos_[0][0] - obstacle_pos_[2][0]) / 2.0;
       get_into_obstacle_flag = y < obs_y + horizon_dist * config.dp_length_rate &&
-        y > obs_y - horizon_dist * config.dp_length_rate;
+        y > obs_y - horizon_dist * config.dp_length_rate && x < obs_x + obs_x_r &&
+        x > obs_x - obs_x_r;
 
       // projection操作耗时很大
       // double obs_size = std::max(std::fabs(obstacle_pos_[0][0] - obstacle_pos_[2][0]),

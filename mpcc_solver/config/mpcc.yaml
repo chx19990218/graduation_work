@@ -2,13 +2,13 @@ ctrl_rate : 50
 simulation_flag : true
 
 # constrains
-theta_dot_upper_limit : 3.0
+theta_dot_upper_limit : 4.0
 angle_upper_limit : 45.0  # deg
 
 # mpcc
-horizon : 25
+horizon : 30
 end_gain_rate : 20.0 #ec, el param rate of end point 
-w_c : 1.0
+w_c : 6.0
 w_l : 20.0
 gamma : 10.0
 w_u : 0.02
@@ -32,7 +32,7 @@ obs_y_r : 0.0000001
 generate_pcd_map_flag : false
 
 # dp
-enable_dp_flag : false
+enable_dp_flag : true
 dp_length_rate : 0.25 # dp_length / 2 * horizon_dist
 
 hover_height : 1.0
