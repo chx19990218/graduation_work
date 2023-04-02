@@ -70,6 +70,34 @@ Mpcc::Mpcc(const Config& config) {
   for (int i = 0; i < horizon; i++) {
     progress.coeffRef(control_dim_ * i + control_dim_ - 1, 0) = Ts;
   }
+
+  C.resize(2 * horizon, BB.cols());
+  cupp.resize(2 * horizon, 1);
+  clow.resize(2 * horizon, 1);
+  // 加速度/角度,里程速度限制限制
+  double max_attitude = config.angle_upper_limit * PI / 180.0;
+  double max_a = 9.8 * std::tan(max_attitude);
+  double max_v = config.theta_dot_upper_limit;
+  for (int i = 0; i < horizon; i++) {
+    // // x轴控制量上限
+    // C.coeffRef(C_temp.rows() + i, i * control_dim_ + 0) = 1.0;
+    // cupp.coeffRef(cupp_temp.rows() + i, 0) = max_a;
+    // clow.coeffRef(clow_temp.rows() + i, 0) = -max_a;
+
+    // // y控制量上限
+    // C.coeffRef(C_temp.rows() + horizon + i, i * control_dim_ + 1) = 1.0;
+    // cupp.coeffRef(cupp_temp.rows() + horizon + i, 0) = max_a;
+    // clow.coeffRef(clow_temp.rows() + horizon + i, 0) = -max_a;
+
+    // theta控制量上限
+    C.coeffRef(horizon + i, i * control_dim_ + control_dim_ - 1) = 1.0;
+    cupp.coeffRef(horizon + i, 0) = max_v;
+    clow.coeffRef(horizon + i, 0) = 0.0;
+  }
+
+  Cx.resize(horizon, state_dim_ * horizon);
+  xup.resize(horizon, 1);
+  xlow.resize(horizon, 1);
 }
 
 void Mpcc::Init(const Resample& referenceline, Eigen::SparseMatrix<double> state,

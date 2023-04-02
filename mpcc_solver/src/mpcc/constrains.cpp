@@ -11,9 +11,6 @@
 void Mpcc::SetConstrains(const Resample& referenceline, const Map& map,
     Eigen::SparseMatrix<double> state, const Config& config) {
   // 走廊边界限制
-  Cx.resize(horizon, state_dim_ * horizon);
-  xup.resize(horizon, 1);
-  xlow.resize(horizon, 1);
   for (int i = 0; i < horizon; i++) {
     double x = stage[i].state[0];
     double y = stage[i].state[2];
@@ -31,49 +28,19 @@ void Mpcc::SetConstrains(const Resample& referenceline, const Map& map,
     // xup.coeffRef(i, 0) = 100000;
     // xlow.coeffRef(i, 0) = -100000;
   }
-  // std::cout << std::endl;
-  // 速度限制
-  // TODO
-
   // addRows 耗时很大，换种方式定义
   Eigen::SparseMatrix<double> C_temp = Eigen::SparseMatrix<double>(Cx * BB);
   Eigen::SparseMatrix<double> cupp_temp = xup - Eigen::SparseMatrix<double>(Cx * AA * state);
   Eigen::SparseMatrix<double> clow_temp = xlow - Eigen::SparseMatrix<double>(Cx * AA * state);
 
-  C.resize(C_temp.rows() + horizon, C_temp.cols());
-  cupp.resize(cupp_temp.rows() + horizon, 1);
-  clow.resize(clow_temp.rows() + horizon, 1);
-
   sp::colMajor::setBlock(C, C_temp, 0, 0);
   sp::colMajor::setBlock(cupp, cupp_temp, 0, 0);
   sp::colMajor::setBlock(clow, clow_temp, 0, 0);
-
-  // 加速度/角度,里程速度限制限制
-  double max_attitude = config.angle_upper_limit * PI / 180.0;
-  double max_a = 9.8 * std::tan(max_attitude);
-  double max_v = config.theta_dot_upper_limit;
-  for (int i = 0; i < horizon; i++) {
-    // // x轴控制量上限
-    // C.coeffRef(C_temp.rows() + i, i * control_dim_ + 0) = 1.0;
-    // cupp.coeffRef(cupp_temp.rows() + i, 0) = max_a;
-    // clow.coeffRef(clow_temp.rows() + i, 0) = -max_a;
-
-    // // y控制量上限
-    // C.coeffRef(C_temp.rows() + horizon + i, i * control_dim_ + 1) = 1.0;
-    // cupp.coeffRef(cupp_temp.rows() + horizon + i, 0) = max_a;
-    // clow.coeffRef(clow_temp.rows() + horizon + i, 0) = -max_a;
-
-    // theta控制量上限
-    C.coeffRef(C_temp.rows() + i, i * control_dim_ + control_dim_ - 1) = 1.0;
-    cupp.coeffRef(cupp_temp.rows() + i, 0) = max_v;
-    clow.coeffRef(clow_temp.rows() + i, 0) = 0.0;
-  }
 }
 
 std::vector<double> Mpcc::GetPointBorderConstrain(const Map& map, double x,
                                                   double y, const Resample& referenceline,
                                                   const Config& config) {
-  
   int stage_index = GetStage(map, x, y);
   std::vector<double> res(4);
   if (stage_index >= 0) {
