@@ -5,6 +5,7 @@ find_package(catkin REQUIRED COMPONENTS
   quadrotor_msgs
   geometry_msgs
   roscpp
+  roslib
   std_msgs
 )
 find_package(Eigen3 REQUIRED)
@@ -32,6 +33,7 @@ include_directories(
   src/obstacle
   src/test
   src/config
+  src/log
   /usr/local/include/osqp
 )
 add_executable(mpcc_node 
@@ -48,6 +50,7 @@ add_executable(mpcc_node
   src/referenceline/search.cpp
   src/referenceline/smooth.cpp
   src/referenceline/resample.cpp
+  src/log/log.cpp
 )
 
 target_link_libraries(mpcc_node ${PYTHON_LIBRARIES})

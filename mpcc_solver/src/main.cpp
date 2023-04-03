@@ -10,7 +10,9 @@
 #include "resample.h"
 #include "mpcc.h"
 #include "plot.h"
+#include "log.h"
 #include "generate_map_test.h"
+
 
 #include <nav_msgs/Odometry.h>
 #include <nav_msgs/Path.h>
@@ -35,6 +37,7 @@ visualization_msgs::Marker drone_msg;
 visualization_msgs::Marker theta_msg;
 
 ros::Time last_odom_time;
+nav_msgs::Odometry log_odom;
 
 int main(int argc, char** argv) {
   ros::init(argc, argv, "mpcc_node");
@@ -88,6 +91,7 @@ int main(int argc, char** argv) {
   auto generate_map_end_time = ros::Time::now();
   std::cout << "1. generate map finished in "
     << (generate_map_end_time - generate_map_start_time).toSec() << "s" << std::endl;
+  Log log(map); 
 
   // 2. search
   auto search_start_time = ros::Time::now();
@@ -169,6 +173,11 @@ int main(int argc, char** argv) {
     mpcc.x_history.emplace_back(state.coeffRef(0, 0));
     mpcc.y_history.emplace_back(state.coeffRef(2, 0));
     publish_topic(mpcc, resample, config);
+
+    // record log
+    if (config.log_flag) {
+      log.Record(mpcc.cmdMsg, log_odom);
+    }
     
     double mpcc_time = (ros::Time::now() - mpcc_start_time).toSec();
     if (i % 10 == 0) {
@@ -185,6 +194,7 @@ int main(int argc, char** argv) {
 
 void odom_callback(const nav_msgs::Odometry& odom){
   last_odom_time = ros::Time::now();
+  log_odom = odom;
   state.coeffRef(0, 0) = odom.pose.pose.position.x;
   state.coeffRef(1, 0) = odom.twist.twist.linear.x;
   state.coeffRef(2, 0) = odom.pose.pose.position.y;

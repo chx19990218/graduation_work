@@ -1,5 +1,6 @@
 ctrl_rate : 50
 simulation_flag : true
+log_flag : false
 
 # constrains
 theta_dot_upper_limit : 4.0

@@ -28,6 +28,7 @@ class Config {
   bool generate_pcd_map_flag;
   bool enable_dp_flag;
   bool simulation_flag;
+  bool log_flag;
   int ctrl_rate;
   int horizon;
 
@@ -55,5 +56,6 @@ class Config {
     nh.getParam("horizon", horizon);
     nh.getParam("simulation_flag", simulation_flag);
     nh.getParam("hover_height", hover_height);
+    nh.getParam("log_flag", log_flag);
   }
 };
