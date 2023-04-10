@@ -379,7 +379,7 @@ void Mpcc::SolveQp(const Resample& referenceline, const Map& map, const Config& 
   // 用来调pid
   std::vector<double> cmd(6, 0.0);
   if (config.circle_test_flag) {
-    CircleTest(state, cmd);
+    CircleTest(state, cmd, config);
     tmpPoint.x = cmd[0];
     tmpPoint.y = cmd[1];
     tmpPoint.z = config.hover_height;
@@ -480,7 +480,6 @@ void Mpcc::SolveQp(const Resample& referenceline, const Map& map, const Config& 
   }
   // 防止越界
   output_index = std::min(output_index, horizon - 1);
-  // output_index = 0;
   // 控制指令
   tmpPoint.x = stage[output_index].state[0];
   tmpPoint.y = stage[output_index].state[2];
@@ -549,7 +548,7 @@ double Mpcc::GetKappa(std::vector<std::vector<double>> points) {
   return 1 / r;
 }
 // cmd : x, y , vx, vy, ax, ay
-void Mpcc::CircleTest(Eigen::SparseMatrix<double> state, std::vector<double>& cmd) {
+void Mpcc::CircleTest(Eigen::SparseMatrix<double> state, std::vector<double>& cmd, const Config& config) {
   double r = 1.0;
   double start_point_range = 0.1;
   if (!start_test_flag) {
@@ -568,7 +567,7 @@ void Mpcc::CircleTest(Eigen::SparseMatrix<double> state, std::vector<double>& cm
     }
   }
   
-  double v = 1.0;
+  double v = config.circle_test_v;
   double omega = v / r;
   int count = 1;
   double t = (ros::Time::now() - start_test_time).toSec();

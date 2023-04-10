@@ -59,8 +59,9 @@ int main(int argc, char** argv) {
   ros::NodeHandle nh("~");
   Config config(nh);
   simulation_flag = config.simulation_flag;
-  ros::Subscriber sub_odom = n.subscribe("odom", 100, odom_callback);
-  ros::Subscriber optitrack_odom = n.subscribe("/mavros/vision_pose/pose", 100, optitrack_callback);
+  ros::Subscriber sub_odom = n.subscribe("odom", 100, odom_callback, ros::TransportHints().tcpNoDelay());
+  ros::Subscriber optitrack_odom = n.subscribe("/mavros/vision_pose/pose", 100, optitrack_callback,
+    ros::TransportHints().tcpNoDelay());
   refer_pub = n.advertise<nav_msgs::Path>("refer_path", 1);
   cmd_pub = n.advertise<quadrotor_msgs::PositionCommand>("position_cmd",1);
   drone_pub = n.advertise<visualization_msgs::Marker>("drone_pose", 1);
@@ -235,7 +236,15 @@ void optitrack_callback(const geometry_msgs::PoseStamped& odom) {
     state.coeffRef(1, 0) = x_p(3);
     state.coeffRef(2, 0) = x_p(1);
     state.coeffRef(3, 0) = x_p(4);
-    // std::cout << state.coeffRef(3, 0) << std::endl;
+
+    nav_msgs::Odometry odom_temp;
+    odom_temp.pose.pose.position.x = x_p(0);
+    odom_temp.pose.pose.position.y = x_p(1);
+    odom_temp.pose.pose.position.z = x_p(2);
+    odom_temp.twist.twist.linear.x = x_p(3);
+    odom_temp.twist.twist.linear.y = x_p(4);
+    odom_temp.twist.twist.linear.z = x_p(5);
+    log_odom = odom_temp;
 
     last_nokov_time = ros::Time::now();
   }

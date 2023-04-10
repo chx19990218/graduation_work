@@ -49,6 +49,8 @@ void GenerateMap(const Config& config, const Mpcc& mpcc) {
     }
   }
   dot_count *= height;
+  // 边界四个点加上
+  dot_count += 4;
   
   flightlog << "WIDTH " << dot_count << std::endl;
   flightlog << "HEIGHT 1" << std::endl;
@@ -95,5 +97,9 @@ void GenerateMap(const Config& config, const Mpcc& mpcc) {
       }
     }
   }
+  flightlog << 4.5 << " " << 1.8 << " " << 1.2 << std::endl;
+  flightlog << 4.5 << " " << -1.8 << " " << 1.2 << std::endl;
+  flightlog << -3.8 << " " << 1.8 << " " << 1.2 << std::endl;
+  flightlog << -3.8 << " " << -1.8 << " " << 1.2 << std::endl;
   flightlog.close();
 }

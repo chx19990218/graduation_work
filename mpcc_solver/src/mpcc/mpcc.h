@@ -84,7 +84,9 @@ class Mpcc {
   std::vector<double> right_border_x;
   std::vector<double> right_border_y;
   std::vector<std::vector<double>> obstacle_pos_{
-      {-1.6, -1.2}, {-1.0, -1.2}, {-1.0, -1.0}, {-1.6, -1.0}};
+      {-0.2, 1.6}, {-0.2, 1.2}, {0.2, 1.2}, {0.2, 1.6}};
+  // std::vector<std::vector<double>> obstacle_pos_{
+  //     {-1.6, -1.2}, {-1.0, -1.2}, {-1.0, -1.0}, {-1.6, -1.0}};
 
   quadrotor_msgs::PositionCommand cmdMsg;
 
@@ -128,5 +130,5 @@ class Mpcc {
       Eigen::SparseMatrix<double> state);
   bool InCorridorRange(const Map& map, double x, double y);
   double GetKappa(std::vector<std::vector<double>> points);
-  void CircleTest(Eigen::SparseMatrix<double> state, std::vector<double>& cmd);
+  void CircleTest(Eigen::SparseMatrix<double> state, std::vector<double>& cmd, const Config& config);
 };

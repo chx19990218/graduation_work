@@ -47,13 +47,12 @@ std::vector<double> Mpcc::GetPointBorderConstrain(const Map& map, double x,
     // 把判断是否在障碍范围内提出来，dp关掉就不计算
     bool get_into_obstacle_flag = false;
     if (config.enable_dp_flag) {
-      double horizon_dist = horizon * config.theta_dot_upper_limit * Ts + 0.1;
-      double obs_y = (obstacle_pos_[0][1] + obstacle_pos_[2][1]) / 2.0;
+      // double horizon_dist = horizon * config.theta_dot_upper_limit * Ts + 0.1;
       double obs_x = (obstacle_pos_[0][0] + obstacle_pos_[2][0]) / 2.0;
-      double obs_x_r = std::fabs(obstacle_pos_[0][0] - obstacle_pos_[2][0]) / 2.0;
-      get_into_obstacle_flag = y < obs_y + horizon_dist * config.dp_length_rate &&
-        y > obs_y - horizon_dist * config.dp_length_rate && x < obs_x + obs_x_r &&
-        x > obs_x - obs_x_r;
+      double obs_y = (obstacle_pos_[0][1] + obstacle_pos_[2][1]) / 2.0;
+      // double obs_x_r = std::fabs(obstacle_pos_[0][0] - obstacle_pos_[2][0]) / 2.0;
+      // 障碍物和当前点在一个stage
+      get_into_obstacle_flag = (GetStage(map, obs_x, obs_y) == stage_index);
 
       // projection操作耗时很大
       // double obs_size = std::max(std::fabs(obstacle_pos_[0][0] - obstacle_pos_[2][0]),
@@ -130,24 +129,25 @@ std::vector<double> Mpcc::GetVerticalPoint(double x1, double y1, double x2,
 std::vector<double> Mpcc::GetBorder(double now_x, double now_y) {
   std::vector<double> border(4, 0.0);
   int index = 0;
-  if (now_y < optimal_path_y[0]) {
+  // 根据横竖改x,y
+  if (now_x < optimal_path_x[0]) {
     index = 0;
     border[0] = left_border_x[0];
     border[1] = left_border_y[0];
     border[2] = right_border_x[0];
     border[3] = right_border_y[0];
-  } else if (now_y >= optimal_path_y.back()) {
-    index = optimal_path_y.size() - 1;
+  } else if (now_x >= optimal_path_x.back()) {
+    index = optimal_path_x.size() - 1;
     border[0] = left_border_x.back();
     border[1] = left_border_y.back();
     border[2] = right_border_x.back();
     border[3] = right_border_y.back();
   } else {
-    for (int i = 1; i < optimal_path_y.size(); i++) {
+    for (int i = 1; i < optimal_path_x.size(); i++) {
       index = i;
-      if (now_y >= optimal_path_y[i - 1] && now_y < optimal_path_y[i]) {
-        double rate = (now_y - optimal_path_y[i - 1]) /
-                      (optimal_path_y[i] - optimal_path_y[i - 1]);
+      if (now_x >= optimal_path_x[i - 1] && now_x < optimal_path_x[i]) {
+        double rate = (now_x - optimal_path_x[i - 1]) /
+                      (optimal_path_x[i] - optimal_path_x[i - 1]);
         border[0] = left_border_x[i - 1] +
                     (left_border_x[i] - left_border_x[i - 1]) * rate;
         border[1] = left_border_y[i - 1] +
