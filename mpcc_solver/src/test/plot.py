@@ -38,6 +38,12 @@ inner_point_y_ = []
 t = []
 
 logPath = os.path.abspath('.')
+index1 = logPath.find('/')
+index2 = logPath.find('/', index1+1, len(logPath))
+index3 = logPath.find('/', index2+1, len(logPath))
+index4 = logPath.find('/', index3+1, len(logPath))
+logPath = logPath[0: index4]
+#print(logPath)
 logPath += "/log/"
 x_log = open(logPath + "x.txt", "r")
 y_log = open(logPath + "y.txt", "r")

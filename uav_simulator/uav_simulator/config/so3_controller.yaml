@@ -1,7 +1,7 @@
 g: 9.81
 mass: 0.98
-gains/rot/x  : 2.7
-gains/rot/y  : 2.7
+gains/rot/x  : 2.5
+gains/rot/y  : 2.5
 gains/rot/z  : 1.0
 gains/ang/x  : 0.13
 gains/ang/y  : 0.13

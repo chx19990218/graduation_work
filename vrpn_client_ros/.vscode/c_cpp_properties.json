@@ -1,0 +1,27 @@
+{
+  "configurations": [
+    {
+      "browse": {
+        "databaseFilename": "${default}",
+        "limitSymbolsToIncludedHeaders": false
+      },
+      "includePath": [
+        "/home/hitcsc/mavros_ws/devel/include/**",
+        "/opt/ros/melodic/include/**",
+        "/home/hitcsc/mavros_ws/src/grid_path_searcher/include/**",
+        "/home/hitcsc/mavros_ws/src/mocap_nokov-master/include/**",
+        "/home/hitcsc/mavros_ws/src/mocap_optitrack/include/**",
+        "/home/hitcsc/mavros_ws/src/test1/include/**",
+        "/home/hitcsc/mavros_ws/src/test2/include/**",
+        "/home/hitcsc/mavros_ws/src/vrpn_client_ros/include/**",
+        "/usr/include/**"
+      ],
+      "name": "ROS",
+      "intelliSenseMode": "gcc-arm64",
+      "compilerPath": "/usr/bin/gcc",
+      "cStandard": "gnu11",
+      "cppStandard": "c++14"
+    }
+  ],
+  "version": 4
+}

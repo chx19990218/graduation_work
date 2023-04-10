@@ -90,7 +90,9 @@ class Mpcc {
 
   bool mpcc_valid_flag_ = false;
   bool init_flag = true;
+  bool start_test_flag = false;
   double max_cmd_a = 0.0;
+  ros::Time start_test_time;
 
   int output_index = 0;
 
@@ -126,4 +128,5 @@ class Mpcc {
       Eigen::SparseMatrix<double> state);
   bool InCorridorRange(const Map& map, double x, double y);
   double GetKappa(std::vector<std::vector<double>> points);
+  void CircleTest(Eigen::SparseMatrix<double> state, std::vector<double>& cmd);
 };

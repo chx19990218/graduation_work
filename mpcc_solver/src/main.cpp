@@ -13,19 +13,29 @@
 #include "log.h"
 #include "generate_map_test.h"
 
-
 #include <nav_msgs/Odometry.h>
 #include <nav_msgs/Path.h>
 #include <visualization_msgs/Marker.h>
 #include <visualization_msgs/MarkerArray.h>
 #include <quadrotor_msgs/PositionCommand.h>
+#include <mavros_msgs/PositionTarget.h>
 
 void odom_callback(const nav_msgs::Odometry& odom);
+void optitrack_callback(const geometry_msgs::PoseStamped& odom);
 void publish_topic(Mpcc& mpcc, const Resample& resample, const Config& config);
+
+// 动捕卡尔曼速度
+void InitOdometry(const geometry_msgs::PoseStamped& odom);
+void PredictOdometry(double delta);
+void UpdateOdometry(const geometry_msgs::PoseStamped& odom);
+
+Eigen::VectorXd x_p;
+Eigen::MatrixXd P_p, Q_p, F_p, H_p, R_p;
 
 Eigen::SparseMatrix<double> state(5, 1);
 ros::Time tOdom;
-ros::Publisher drone_pub, theta_pub, predict_pub, theta_predict_pub, cmd_pub, refer_pub;
+ros::Publisher drone_pub, theta_pub, predict_pub,
+  theta_predict_pub, cmd_pub, px4_pub, refer_pub;
 
 geometry_msgs::Point tmpPoint;
 geometry_msgs::Vector3 tmpVector;
@@ -37,20 +47,27 @@ visualization_msgs::Marker drone_msg;
 visualization_msgs::Marker theta_msg;
 
 ros::Time last_odom_time;
+ros::Time last_nokov_time;
 nav_msgs::Odometry log_odom;
+bool nokov_init_flag = false;
+
+bool simulation_flag;
 
 int main(int argc, char** argv) {
   ros::init(argc, argv, "mpcc_node");
   ros::NodeHandle n;
   ros::NodeHandle nh("~");
-
-  ros::Subscriber sub_odom = n.subscribe("odom", 100, odom_callback, ros::TransportHints().tcpNoDelay());
+  Config config(nh);
+  simulation_flag = config.simulation_flag;
+  ros::Subscriber sub_odom = n.subscribe("odom", 100, odom_callback);
+  ros::Subscriber optitrack_odom = n.subscribe("/mavros/vision_pose/pose", 100, optitrack_callback);
   refer_pub = n.advertise<nav_msgs::Path>("refer_path", 1);
   cmd_pub = n.advertise<quadrotor_msgs::PositionCommand>("position_cmd",1);
   drone_pub = n.advertise<visualization_msgs::Marker>("drone_pose", 1);
   theta_pub = n.advertise<visualization_msgs::Marker>("theta_pose", 1);
   predict_pub = n.advertise<nav_msgs::Path>("predict_path", 1);
   theta_predict_pub = n.advertise<nav_msgs::Path>("theta_predict_path", 1);
+  px4_pub = n.advertise<mavros_msgs::PositionTarget>("mavros/setpoint_raw/local", 1);
 
   theta_trajPred_msg.header.frame_id = "world";
   trajPred_msg.header.frame_id = "world";
@@ -75,7 +92,6 @@ int main(int argc, char** argv) {
   Resample resample;
   Obstacle obstacle;
   Plot plot;
-  Config config(nh);
   Mpcc mpcc(config);
 
   ros::Rate rate(config.ctrl_rate);
@@ -126,8 +142,8 @@ int main(int argc, char** argv) {
   }
   refer_pub.publish(refTraj_msg);
 
-  
   ros::spinOnce();
+
   if (config.enable_dp_flag) {
     ros::Time dp_start_time = ros::Time::now();
     obstacle.Update(resample, map, mpcc, state, config);
@@ -193,19 +209,55 @@ int main(int argc, char** argv) {
 }
 
 void odom_callback(const nav_msgs::Odometry& odom){
-  last_odom_time = ros::Time::now();
-  log_odom = odom;
-  state.coeffRef(0, 0) = odom.pose.pose.position.x;
-  state.coeffRef(1, 0) = odom.twist.twist.linear.x;
-  state.coeffRef(2, 0) = odom.pose.pose.position.y;
-  state.coeffRef(3, 0) = odom.twist.twist.linear.y;
+  if (simulation_flag) {
+    last_odom_time = ros::Time::now();
+    log_odom = odom;
+    state.coeffRef(0, 0) = odom.pose.pose.position.x;
+    state.coeffRef(1, 0) = odom.twist.twist.linear.x;
+    state.coeffRef(2, 0) = odom.pose.pose.position.y;
+    state.coeffRef(3, 0) = odom.twist.twist.linear.y;
+  }
+}
+
+void optitrack_callback(const geometry_msgs::PoseStamped& odom) {
+  if (!simulation_flag) {
+    last_odom_time = ros::Time::now();
+    if (!nokov_init_flag) {
+      InitOdometry(odom);
+      nokov_init_flag = true;
+    }
+    ros::Time now_nokov_time = ros::Time::now();
+    double delta = (now_nokov_time - last_nokov_time).toSec();
+    PredictOdometry(delta);
+    UpdateOdometry(odom);
+
+    state.coeffRef(0, 0) = x_p(0);
+    state.coeffRef(1, 0) = x_p(3);
+    state.coeffRef(2, 0) = x_p(1);
+    state.coeffRef(3, 0) = x_p(4);
+    // std::cout << state.coeffRef(3, 0) << std::endl;
+
+    last_nokov_time = ros::Time::now();
+  }
 }
 
 void publish_topic(Mpcc& mpcc, const Resample& resample, const Config& config) {
   // 控制指令
   cmd_pub.publish(mpcc.cmdMsg);
 
-  if (config.simulation_flag) {
+  mavros_msgs::PositionTarget px4_msg;
+  px4_msg.position.x = mpcc.cmdMsg.position.x;  
+  px4_msg.position.y = mpcc.cmdMsg.position.y;
+  px4_msg.position.z = mpcc.cmdMsg.position.z;   
+  px4_msg.velocity.x = mpcc.cmdMsg.velocity.x;
+  px4_msg.velocity.y = mpcc.cmdMsg.velocity.y;
+  px4_msg.velocity.z = mpcc.cmdMsg.velocity.z;
+  px4_msg.acceleration_or_force.x = mpcc.cmdMsg.acceleration.x;          			
+  px4_msg.acceleration_or_force.y = mpcc.cmdMsg.acceleration.y;
+  px4_msg.acceleration_or_force.z = mpcc.cmdMsg.acceleration.z;
+  px4_pub.publish(px4_msg);
+
+  // if (config.simulation_flag) {
     // rviz 无人机箭头
     drone_msg.points.clear();
     pt.x = state.coeffRef(0,0);
@@ -270,5 +322,54 @@ void publish_topic(Mpcc& mpcc, const Resample& resample, const Config& config) {
       theta_msg.points.push_back(pt);
       theta_pub.publish(theta_msg);
     }
-  }
+  // }
+}
+
+void InitOdometry(const geometry_msgs::PoseStamped& odom) {
+  x_p = Eigen::VectorXd(6);
+  x_p << odom.pose.position.x, odom.pose.position.y, odom.pose.position.z, 0.0, 0.0, 0.0;
+  P_p = Eigen::MatrixXd::Identity(6, 6);
+  P_p(0, 0) = 0.1 * 0.1;
+  P_p(1, 1) = 0.1 * 0.1;
+  P_p(2, 2) = 0.1 * 0.1;
+  P_p(3, 3) = 0.1 * 0.1;
+  P_p(4, 4) = 0.1 * 0.1;
+  P_p(5, 5) = 0.1 * 0.1;
+  Q_p = Eigen::MatrixXd::Identity(6, 6);
+  Q_p(0, 0) = 0.0005 * 0.0005;
+  Q_p(1, 1) = 0.0005 * 0.0005;
+  Q_p(2, 2) = 0.0005 * 0.0005;
+  Q_p(3, 3) = 0.005 * 0.005;
+  Q_p(4, 4) = 0.005 * 0.005;
+  Q_p(5, 5) = 0.005 * 0.005;
+  F_p = Eigen::MatrixXd::Identity(6, 6);
+  H_p = Eigen::Matrix<double, 3, 6>();
+  H_p << 1.0, 0, 0, 0, 0, 0, 0, 1.0, 0, 0, 0, 0, 0, 0, 1.0, 0, 0, 0;
+  R_p = Eigen::MatrixXd::Identity(3, 3);
+  R_p(0, 0) = 0.01 * 0.01;
+  R_p(1, 1) = 0.01 * 0.01;
+  R_p(2, 2) = 0.01 * 0.01;
+}
+
+void PredictOdometry(double delta) {
+  F_p(0, 0) = 1.0;
+  F_p(1, 1) = 1.0;
+  F_p(2, 2) = 1.0;
+  F_p(3, 3) = 1.0;
+  F_p(4, 4) = 1.0;
+  F_p(5, 5) = 1.0;
+  F_p(0, 3) = delta;
+  F_p(1, 4) = delta;
+  F_p(2, 5) = delta;
+  x_p = F_p * x_p;
+  P_p = F_p * P_p * F_p.transpose() + Q_p;
+}
+
+void UpdateOdometry(const geometry_msgs::PoseStamped& odom) {
+  Eigen::Matrix<double, 3, 1> z_p;
+  z_p << odom.pose.position.x, odom.pose.position.y, odom.pose.position.z;
+  Eigen::MatrixXd y_p = z_p - H_p * x_p;
+  Eigen::MatrixXd k_p = P_p * H_p.transpose() * (H_p * P_p * H_p.transpose() + R_p).inverse();
+  x_p = x_p + k_p * y_p;
+  P_p = (Eigen::MatrixXd::Identity(6, 6) - k_p * H_p) * P_p;
 }

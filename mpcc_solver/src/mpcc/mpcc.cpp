@@ -71,28 +71,28 @@ Mpcc::Mpcc(const Config& config) {
     progress.coeffRef(control_dim_ * i + control_dim_ - 1, 0) = Ts;
   }
 
-  C.resize(2 * horizon, BB.cols());
-  cupp.resize(2 * horizon, 1);
-  clow.resize(2 * horizon, 1);
+  C.resize(4 * horizon, BB.cols());
+  cupp.resize(4 * horizon, 1);
+  clow.resize(4 * horizon, 1);
   // 加速度/角度,里程速度限制限制
   double max_attitude = config.angle_upper_limit * PI / 180.0;
   double max_a = 9.8 * std::tan(max_attitude);
   double max_v = config.theta_dot_upper_limit;
   for (int i = 0; i < horizon; i++) {
-    // // x轴控制量上限
-    // C.coeffRef(C_temp.rows() + i, i * control_dim_ + 0) = 1.0;
-    // cupp.coeffRef(cupp_temp.rows() + i, 0) = max_a;
-    // clow.coeffRef(clow_temp.rows() + i, 0) = -max_a;
+    // x轴控制量上限
+    C.coeffRef(horizon + i, i * control_dim_ + 0) = 1.0;
+    cupp.coeffRef(horizon + i, 0) = max_a;
+    clow.coeffRef(horizon + i, 0) = -max_a;
 
-    // // y控制量上限
-    // C.coeffRef(C_temp.rows() + horizon + i, i * control_dim_ + 1) = 1.0;
-    // cupp.coeffRef(cupp_temp.rows() + horizon + i, 0) = max_a;
-    // clow.coeffRef(clow_temp.rows() + horizon + i, 0) = -max_a;
+    // y控制量上限
+    C.coeffRef(2 * horizon + i, i * control_dim_ + 1) = 1.0;
+    cupp.coeffRef(2 * horizon + i, 0) = max_a;
+    clow.coeffRef(2 * horizon + i, 0) = -max_a;
 
     // theta控制量上限
-    C.coeffRef(horizon + i, i * control_dim_ + control_dim_ - 1) = 1.0;
-    cupp.coeffRef(horizon + i, 0) = max_v;
-    clow.coeffRef(horizon + i, 0) = 0.0;
+    C.coeffRef(3 * horizon + i, i * control_dim_ + control_dim_ - 1) = 1.0;
+    cupp.coeffRef(3 * horizon + i, 0) = max_v;
+    clow.coeffRef(3 * horizon + i, 0) = 0.0;
   }
 
   Cx.resize(horizon, state_dim_ * horizon);
@@ -376,6 +376,26 @@ void Mpcc::SolveQp(const Resample& referenceline, const Map& map, const Config& 
   geometry_msgs::Point tmpPoint;
   geometry_msgs::Vector3 tmpVector;
   
+  // 用来调pid
+  std::vector<double> cmd(6, 0.0);
+  if (config.circle_test_flag) {
+    CircleTest(state, cmd);
+    tmpPoint.x = cmd[0];
+    tmpPoint.y = cmd[1];
+    tmpPoint.z = config.hover_height;
+    cmdMsg.position = tmpPoint;
+    tmpVector.x = cmd[2];
+    tmpVector.y = cmd[3];
+    tmpVector.z = 0.0;
+    cmdMsg.velocity = tmpVector;
+    tmpVector.x = cmd[4];
+    tmpVector.y = cmd[5];
+    tmpVector.z = 0.0;
+    cmdMsg.acceleration = tmpVector;
+    cmdMsg.header.stamp = ros::Time::now();
+    return;
+  } 
+  
   if (!mpcc_valid_flag_) {
     output_index = 0;
     auto pos_theta = referenceline.spline.getPostion(state.coeffRef(4, 0));
@@ -441,12 +461,12 @@ void Mpcc::SolveQp(const Resample& referenceline, const Map& map, const Config& 
       theta_x_.emplace_back(pos(0));
       theta_y_.emplace_back(pos(1));
 
-      // 安全检查
-      double max_a = 9.8 * std::tan(config.angle_upper_limit * PI / 180.0);
-      if (std::fabs(inputPredict.coeffRef(0, output_index)) > max_a ||
-          std::fabs(inputPredict.coeffRef(0, output_index)) > max_a) {
-        mpcc_valid_flag_ = false;
-      }
+      // 加速度限制加上，安全检查关掉
+      // double max_a = 9.8 * std::tan(config.angle_upper_limit * PI / 180.0);
+      // if (std::fabs(inputPredict.coeffRef(0, output_index)) > max_a ||
+      //     std::fabs(inputPredict.coeffRef(0, output_index)) > max_a) {
+      //   mpcc_valid_flag_ = false;
+      // }
     }
     // std::cout << std::endl;
   } else {
@@ -460,6 +480,7 @@ void Mpcc::SolveQp(const Resample& referenceline, const Map& map, const Config& 
   }
   // 防止越界
   output_index = std::min(output_index, horizon - 1);
+  // output_index = 0;
   // 控制指令
   tmpPoint.x = stage[output_index].state[0];
   tmpPoint.y = stage[output_index].state[2];
@@ -526,4 +547,44 @@ double Mpcc::GetKappa(std::vector<std::vector<double>> points) {
   double s = std::sqrt(p * (p - a) * (p - b) * (p - c));
   double r = a * b * c / (4 * s);
   return 1 / r;
+}
+// cmd : x, y , vx, vy, ax, ay
+void Mpcc::CircleTest(Eigen::SparseMatrix<double> state, std::vector<double>& cmd) {
+  double r = 1.0;
+  double start_point_range = 0.1;
+  if (!start_test_flag) {
+    if (std::pow(state.coeffRef(0, 0) - r, 2) + std::pow(state.coeffRef(2, 0) - 0, 2)
+        > start_point_range * start_point_range) {
+      cmd[0] = r;
+      cmd[1] = 0.0;
+      cmd[2] = 0.0;
+      cmd[3] = 0.0;
+      cmd[4] = 0.0;
+      cmd[5] = 0.0;
+      return;
+    } else {
+      start_test_flag = true;
+      start_test_time = ros::Time::now();
+    }
+  }
+  
+  double v = 1.0;
+  double omega = v / r;
+  int count = 1;
+  double t = (ros::Time::now() - start_test_time).toSec();
+  if (v * t < 2 * PI * r * static_cast<double>(count)) {
+    cmd[0] = r * std::cos(omega * t);
+    cmd[1] = r * std::sin(omega * t);
+    cmd[2] = -r * omega * std::sin(omega * t);
+    cmd[3] = r * omega * std::cos(omega * t);
+    cmd[4] = -r * omega * omega * std::cos(omega * t);
+    cmd[5] = -r * omega * omega * std::sin(omega * t);
+  } else {
+    cmd[0] = r;
+    cmd[1] = 0.0;
+    cmd[2] = 0.0;
+    cmd[3] = 0.0;
+    cmd[4] = 0.0;
+    cmd[5] = 0.0;
+  }
 }

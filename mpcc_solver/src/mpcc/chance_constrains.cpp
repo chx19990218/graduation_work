@@ -8,16 +8,21 @@
 void Mpcc::chance_constrains_set(std::vector<double>& coeff, std::vector<double> obst,
                                  std::vector<double> ego, const Config& config) {
   double kesi = -1.0;
-  double alpha = 0.99;
+  double alpha = 1.0;
   double z_alpha = normsinv(1 - alpha / horizon);
-  double S_x = 0.4;
-  double S_y = 0.1;
+  double ego_sigma_square = 0.0004;
+  double obs_sigma_square = 0.0001;
   double r_box_x = config.obs_x_r;
   double r_box_y = config.obs_y_r;
   
   // chance constrains 等式左右除以2，统一kesi为-1.0
-  double denom_x = 2 * std::pow(r_box_x + z_alpha * S_x, 2);
-  double denom_y = 2 * std::pow(r_box_y + z_alpha * S_y, 2);
+  double denom_x = 2 * std::pow(r_box_x + z_alpha * std::sqrt(ego_sigma_square + obs_sigma_square), 2);
+  double denom_y = 2 * std::pow(r_box_y + z_alpha * std::sqrt(ego_sigma_square + obs_sigma_square), 2);
+
+  // denom_x = 0.05;
+  // denom_y = 0.2;
+
+  // std::cout << denom_x << "," << denom_y << "," << z_alpha << std::endl;
   // // 不用chance cobstrains, 将denom_x denom_y设为椭圆半径平方
   // denom_x = config.obs_x_r * config.obs_x_r;
   // denom_y = config.obs_y_r * config.obs_y_r;

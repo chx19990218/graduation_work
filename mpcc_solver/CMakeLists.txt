@@ -7,6 +7,7 @@ find_package(catkin REQUIRED COMPONENTS
   roscpp
   roslib
   std_msgs
+  mavros
 )
 find_package(Eigen3 REQUIRED)
 find_package(osqp REQUIRED)
