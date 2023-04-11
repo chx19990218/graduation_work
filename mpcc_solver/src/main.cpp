@@ -255,6 +255,7 @@ void publish_topic(Mpcc& mpcc, const Resample& resample, const Config& config) {
   cmd_pub.publish(mpcc.cmdMsg);
 
   mavros_msgs::PositionTarget px4_msg;
+  px4_msg.coordinate_frame = 1;
   px4_msg.position.x = mpcc.cmdMsg.position.x;  
   px4_msg.position.y = mpcc.cmdMsg.position.y;
   px4_msg.position.z = mpcc.cmdMsg.position.z;   
@@ -266,7 +267,7 @@ void publish_topic(Mpcc& mpcc, const Resample& resample, const Config& config) {
   px4_msg.acceleration_or_force.z = mpcc.cmdMsg.acceleration.z;
   px4_pub.publish(px4_msg);
 
-  // if (config.simulation_flag) {
+  if (config.simulation_flag) {
     // rviz 无人机箭头
     drone_msg.points.clear();
     pt.x = state.coeffRef(0,0);
@@ -331,7 +332,7 @@ void publish_topic(Mpcc& mpcc, const Resample& resample, const Config& config) {
       theta_msg.points.push_back(pt);
       theta_pub.publish(theta_msg);
     }
-  // }
+  }
 }
 
 void InitOdometry(const geometry_msgs::PoseStamped& odom) {
