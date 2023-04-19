@@ -267,7 +267,7 @@ void publish_topic(Mpcc& mpcc, const Resample& resample, const Config& config) {
   px4_msg.acceleration_or_force.z = mpcc.cmdMsg.acceleration.z;
   px4_pub.publish(px4_msg);
 
-  if (config.simulation_flag) {
+  // if (config.simulation_flag) {
     // rviz 无人机箭头
     drone_msg.points.clear();
     pt.x = state.coeffRef(0,0);
@@ -332,7 +332,7 @@ void publish_topic(Mpcc& mpcc, const Resample& resample, const Config& config) {
       theta_msg.points.push_back(pt);
       theta_pub.publish(theta_msg);
     }
-  }
+  // }
 }
 
 void InitOdometry(const geometry_msgs::PoseStamped& odom) {

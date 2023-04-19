@@ -11,7 +11,7 @@ circle_test_v : 1.0
 
 # constrains
 theta_dot_upper_limit : 1.0
-angle_upper_limit : 30.0  # deg
+angle_upper_limit : 5.0  # deg
 
 # mpcc
 horizon : 25

@@ -32,7 +32,7 @@ class Map {
   //     {1.5, 2.5}, {1.5, 5.0}, {2.7, 5.0}, {2.7, -1.0},
   //     {1.0, -1.0}, {1.0, -3.5}};
   std::vector<std::vector<double>> center_point_{
-      {-3.3, -1.3}, {-3.3, 1.3}, {4.0, 1.3}, {4.0, -1.3}};
+      {-2.8, -1.3}, {-2.8, 1.3}, {4.0, 1.3}, {4.0, -1.3}};
 
   Eigen::VectorXd center_point_x_, center_point_y_;
   Eigen::VectorXd outer_point_x_, outer_point_y_;

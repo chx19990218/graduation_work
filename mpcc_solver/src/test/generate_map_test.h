@@ -99,7 +99,7 @@ void GenerateMap(const Config& config, const Mpcc& mpcc) {
   }
   flightlog << 4.5 << " " << 1.8 << " " << 1.2 << std::endl;
   flightlog << 4.5 << " " << -1.8 << " " << 1.2 << std::endl;
-  flightlog << -3.8 << " " << 1.8 << " " << 1.2 << std::endl;
-  flightlog << -3.8 << " " << -1.8 << " " << 1.2 << std::endl;
+  flightlog << -3.0 << " " << 1.8 << " " << 1.2 << std::endl;
+  flightlog << -3.0 << " " << -1.8 << " " << 1.2 << std::endl;
   flightlog.close();
 }

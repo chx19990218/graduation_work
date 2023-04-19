@@ -1,17 +1,18 @@
 <launch>
 
-<!-- <node pkg="rviz" name="rviz" type="rviz" output="log"
+<node pkg="rviz" name="rviz" type="rviz" output="log"
   args="-d $(find uav_simulator)/config/rviz_config.rviz">
 </node>
 
-<include file="$(find map_generator)/launch/map_generator.launch"> -->
+<include file="$(find map_generator)/launch/map_generator.launch">
 
 </include>
-
+<group ns="drone0">
   <node pkg="mpcc_solver" name="mpcc_node" type="mpcc_node" output="screen">
     <remap from="~odom" to="odom"/>
     <remap from="~position_cmd" to="position_cmd"/>
     <rosparam command="load" file="$(find mpcc_solver)/config/mpcc.yaml" />
   </node>
+</group>
 
 </launch>
