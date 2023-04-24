@@ -21,6 +21,7 @@
 #include <mavros_msgs/PositionTarget.h>
 
 void odom_callback(const nav_msgs::Odometry& odom);
+void obs_odom_callback(const nav_msgs::Odometry& odom);
 void optitrack_callback(const geometry_msgs::PoseStamped& odom);
 void obs_callback(const nav_msgs::Path& path);
 void publish_topic(Mpcc& mpcc, const Resample& resample, const Config& config);
@@ -47,6 +48,7 @@ geometry_msgs::Point pt;
 visualization_msgs::Marker drone_msg;
 visualization_msgs::Marker theta_msg;
 nav_msgs::Path ego_path, obs_path;
+nav_msgs::Odometry obs_odom;
 ros::Time ego_path_time, obs_path_time;
 
 ros::Time last_odom_time;
@@ -63,6 +65,8 @@ int main(int argc, char** argv) {
   Config config(nh);
   simulation_flag = config.simulation_flag;
   ros::Subscriber sub_odom = n.subscribe("odom", 100, odom_callback, ros::TransportHints().tcpNoDelay());
+  std::string obs_odom_topic = "/drone" + std::to_string(1 - config.group_index) + "/odom";
+  ros::Subscriber sub_obs_odom = n.subscribe(obs_odom_topic, 100, obs_odom_callback, ros::TransportHints().tcpNoDelay());
   ros::Subscriber optitrack_odom = n.subscribe("/mavros/vision_pose/pose", 100, optitrack_callback,
     ros::TransportHints().tcpNoDelay());
   std::string obs_topic = "/drone" + std::to_string(1 - config.group_index) + "/predict_path";
@@ -189,7 +193,7 @@ int main(int argc, char** argv) {
     // std::cout << "before:" << config.group_index << "," << in_corridor_range << "," << mpcc.output_index
     //   << "," << mpcc.init_flag << "," << mpcc.mpcc_valid_flag_ << std::endl;
     // ros::Time qp_start_time = ros::Time::now();
-    mpcc.SolveQp(resample, map, config, state, ego_path, obs_path);
+    mpcc.SolveQp(resample, map, config, state, ego_path, obs_path, obs_odom);
 
     // std::cout << "after:" << config.group_index << "," << in_corridor_range << "," << mpcc.output_index
     //   << "," << mpcc.init_flag << "," << mpcc.mpcc_valid_flag_ << std::endl;
@@ -227,6 +231,10 @@ void odom_callback(const nav_msgs::Odometry& odom){
     state.coeffRef(2, 0) = odom.pose.pose.position.y;
     state.coeffRef(3, 0) = odom.twist.twist.linear.y;
   }
+}
+
+void obs_odom_callback(const nav_msgs::Odometry& odom) {
+  obs_odom = odom;
 }
 
 void optitrack_callback(const geometry_msgs::PoseStamped& odom) {
@@ -313,6 +321,7 @@ void publish_topic(Mpcc& mpcc, const Resample& resample, const Config& config) {
         tmpPose.pose.orientation.w = q.w();
         trajPred_msg.poses[i] = tmpPose;
       }
+      ego_path = trajPred_msg;
       predict_pub.publish(trajPred_msg);
 
       // rviz theta预测轨迹

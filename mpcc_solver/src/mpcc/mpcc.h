@@ -9,6 +9,7 @@
 
 #include <quadrotor_msgs/PositionCommand.h>
 #include <nav_msgs/Path.h>
+#include <nav_msgs/Odometry.h>
 
 #include "osqp_interface.h"
 #include "resample.h"
@@ -110,10 +111,11 @@ class Mpcc {
   void UpdateState(const Resample& referenceline, Eigen::SparseMatrix<double>& state);
   void CalculateCost(const Resample& referenceline, const Config& config,
     Eigen::SparseMatrix<double> state, const nav_msgs::Path& ego_path,
-    const nav_msgs::Path& obs_path);
+    const nav_msgs::Path& obs_path, const nav_msgs::Odometry obs_odom, const Map& map);
   void RecedeOneHorizon(const Resample& referenceline);
   void SolveQp(const Resample& referenceline, const Map& map, const Config& config,
-    Eigen::SparseMatrix<double> state, nav_msgs::Path& ego_path, const nav_msgs::Path& obs_path);
+    Eigen::SparseMatrix<double> state, nav_msgs::Path& ego_path, const nav_msgs::Path& obs_path,
+    const nav_msgs::Odometry obs_odom);
   int GetStage(const Map& map, double x, double y);
   bool InRec(std::vector<std::vector<double>>& rec, double x, double y);
   bool InQuad(std::vector<std::vector<double>>& rec, double x, double y);

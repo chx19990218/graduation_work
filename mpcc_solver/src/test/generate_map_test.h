@@ -39,15 +39,15 @@ void GenerateMap(const Config& config, const Mpcc& mpcc) {
     dot_count += inner_num;
   }
 
-  double x_l = std::min(mpcc.obstacle_pos_[0][0], mpcc.obstacle_pos_[2][0]);
-  double x_r = std::max(mpcc.obstacle_pos_[0][0], mpcc.obstacle_pos_[2][0]);
-  double y_l = std::min(mpcc.obstacle_pos_[0][1], mpcc.obstacle_pos_[2][1]);
-  double y_r = std::max(mpcc.obstacle_pos_[0][1], mpcc.obstacle_pos_[2][1]);
-  for (double i = x_l; i <= x_r; i += interval) {
-    for (double j = y_l; j <= y_r; j += interval) {
-      dot_count++;
-    }
-  }
+  // double x_l = std::min(mpcc.obstacle_pos_[0][0], mpcc.obstacle_pos_[2][0]);
+  // double x_r = std::max(mpcc.obstacle_pos_[0][0], mpcc.obstacle_pos_[2][0]);
+  // double y_l = std::min(mpcc.obstacle_pos_[0][1], mpcc.obstacle_pos_[2][1]);
+  // double y_r = std::max(mpcc.obstacle_pos_[0][1], mpcc.obstacle_pos_[2][1]);
+  // for (double i = x_l; i <= x_r; i += interval) {
+  //   for (double j = y_l; j <= y_r; j += interval) {
+  //     dot_count++;
+  //   }
+  // }
   dot_count *= height;
   // 边界四个点加上
   dot_count += 4;
@@ -90,13 +90,13 @@ void GenerateMap(const Config& config, const Mpcc& mpcc) {
       }
     }
   }
-  for (double i = x_l; i <= x_r; i += interval) {
-    for (double j = y_l; j <= y_r; j += interval) {
-      for (int k = 0; k < height; k++) {
-        flightlog << i << " " << j << " " << k * 0.05 << std::endl;
-      }
-    }
-  }
+  // for (double i = x_l; i <= x_r; i += interval) {
+  //   for (double j = y_l; j <= y_r; j += interval) {
+  //     for (int k = 0; k < height; k++) {
+  //       flightlog << i << " " << j << " " << k * 0.05 << std::endl;
+  //     }
+  //   }
+  // }
   flightlog << 4.5 << " " << 1.8 << " " << 1.2 << std::endl;
   flightlog << 4.5 << " " << -1.8 << " " << 1.2 << std::endl;
   flightlog << -3.0 << " " << 1.8 << " " << 1.2 << std::endl;

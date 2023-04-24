@@ -16,7 +16,15 @@ void Mpcc::SetConstrains(const Resample& referenceline, const Map& map,
     double x = stage[i].state[0];
     double y = stage[i].state[2];
     std::vector<double> border = GetPointBorderConstrain(map, x, y, referenceline, config);
-    // std::cout << border[0] << "," << border[1] << "," << border[2] << "," << border[3] << std::endl;
+    // double rate = 0.8;
+    // if (config.group_index == 0) {
+    //   border[2] = rate * border[0] + (1.0 - rate) * border[2];
+    //   border[3] = rate * border[1] + (1.0 - rate) * border[3];
+    // } else {
+    //   border[0] = (1.0 - rate) * border[0] + rate * border[2];
+    //   border[1] = (1.0 - rate) * border[1] + rate * border[3];
+    // }
+    // std::cout << config.group_index << "," << border[0] << "," << border[1] << "," << border[2] << "," << border[3] << std::endl;
     double numer = -(border[0] - border[2]);
     double denom = (border[1] - border[3]);
     double dbmax = std::max(numer * border[0] - denom * border[1], numer * border[2] - denom * border[3]);

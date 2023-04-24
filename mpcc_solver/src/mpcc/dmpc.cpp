@@ -54,6 +54,7 @@ int Mpcc::CheckCollision(const nav_msgs::Path& ego_path, const nav_msgs::Path& o
       return i;
     }
   }
+  // std::cout << ego_path.poses[0].pose.position.x << std::endl;
   return -1;
 }
 
@@ -102,9 +103,9 @@ bool Mpcc::CalcuDMPC(const nav_msgs::Path& ego_path, const nav_msgs::Path& obs_p
   
   uup.resize(1, 1);
   uup.coeffRef(0, 0) = 10000000.0;
-  if (collision_index == -1) {
+  // if (collision_index == -1) {
     ulow.coeffRef(0, 0) = -10000000.0;
-  }
+  // }
   return true;
   // if D(iagent,i) == 1
   //   v_ij = P(3*kci(iagent , i)-2:3*kci(iagent , i),iagent)-P(3*kci(iagent , i)-2:3*kci(iagent , i),i);

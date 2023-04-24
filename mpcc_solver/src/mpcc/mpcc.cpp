@@ -198,7 +198,7 @@ void Mpcc::RecedeOneHorizon(const Resample& referenceline) {
 
 void Mpcc::CalculateCost(const Resample& referenceline, const Config& config,
     Eigen::SparseMatrix<double> state, const nav_msgs::Path& ego_path,
-    const nav_msgs::Path& obs_path) {
+    const nav_msgs::Path& obs_path, const nav_msgs::Odometry obs_odom, const Map& map) {
       //20 10 50
   double w_c = config.w_c;
   double w_l = config.w_l;
@@ -208,6 +208,25 @@ void Mpcc::CalculateCost(const Resample& referenceline, const Config& config,
   // double gamma = 0.001;
   Eigen::SparseMatrix<double> Qn;
   Eigen::SparseMatrix<double> qn;
+  bool path_overlap_flag = false;
+  if (obs_path.poses.size() > 0) {
+    double ego_start_theta = referenceline.spline.porjectOnSpline(stage[0].state[0], stage[0].state[2]);
+    double ego_end_theta = referenceline.spline.porjectOnSpline(stage[horizon - 1].state[0],
+                                                                stage[horizon - 1].state[2]);
+    double obs_start_theta = referenceline.spline.porjectOnSpline(obs_path.poses[0].pose.position.x,
+                                                                  obs_path.poses[0].pose.position.y);
+    double obs_end_theta = referenceline.spline.porjectOnSpline(obs_path.poses[horizon -1].pose.position.x,
+                                                                obs_path.poses[horizon -1].pose.position.y);
+    if (ego_start_theta > ego_end_theta) {
+      ego_end_theta += max_theta_;
+    }
+    if (obs_start_theta > obs_end_theta) {
+      obs_end_theta += max_theta_;
+    }
+    path_overlap_flag = (ego_end_theta >= obs_start_theta && ego_end_theta <= obs_end_theta) ||
+      (obs_end_theta >= ego_start_theta && obs_end_theta <= ego_end_theta);
+  }
+
   for (int i = 0; i < horizon; i++) {
     if (false) {
       double theta = std::fmod(optimal_theta[i], max_theta_);  // TODO 考虑闭环，theta跑一圈
@@ -288,8 +307,8 @@ void Mpcc::CalculateCost(const Resample& referenceline, const Config& config,
     double Sobs = config.Qobs;
     double x0 = config.obs_x;
     double y0 = config.obs_y;
-    // if (config.obs_penalty_valid) {
-    if (collision_index != -1) {
+    if (config.obs_penalty_valid) {
+    // if (collision_index != -1) {
       x0 = (ego_path.poses[collision_index].pose.position.x + 
         obs_path.poses[collision_index].pose.position.x) / 2.0;
       y0 = (ego_path.poses[collision_index].pose.position.y + 
@@ -316,6 +335,53 @@ void Mpcc::CalculateCost(const Resample& referenceline, const Config& config,
 
       qn.coeffRef(0, 0) += -Sobs * p11;
       qn.coeffRef(2, 0) += -Sobs * p12;
+    }
+    double r = std::sqrt(std::pow(obs_odom.pose.pose.position.x - state.coeffRef(0, 0), 2) +
+      std::pow(obs_odom.pose.pose.position.y - state.coeffRef(2, 0), 2));
+    if (obs_path.poses.size() > 0 && path_overlap_flag) {
+      int stage_index = GetStage(map, stage[i].state[0], stage[i].state[2]);
+      if (stage_index >= 0) {
+        std::vector<double> outer_vertical_point = GetVerticalPoint(map.outer_point_x_[stage_index],
+                                                                    map.outer_point_y_[stage_index],
+                                                                    map.outer_point_x_[stage_index + 1], 
+                                                                    map.outer_point_y_[stage_index + 1],
+                                                                    stage[i].state[0],
+                                                                    stage[i].state[2]);
+        std::vector<double> inner_vertical_point = GetVerticalPoint(map.inner_point_x_[stage_index],
+                                                                    map.inner_point_y_[stage_index],
+                                                                    map.inner_point_x_[stage_index + 1], 
+                                                                    map.inner_point_y_[stage_index + 1],
+                                                                    stage[i].state[0],
+                                                                    stage[i].state[2]);
+        double corridor_x, corridor_y;
+        double S_corridor = 1.0 * config.theta_dot_upper_limit;
+        if (config.group_index == 0) {
+          corridor_x = outer_vertical_point[0];
+          corridor_y = outer_vertical_point[1];
+        } else {
+          corridor_x = inner_vertical_point[0];
+          corridor_y = inner_vertical_point[1];
+        }
+        Qn.coeffRef(0, 0) += S_corridor * 1.0;
+        Qn.coeffRef(2, 2) += S_corridor * 1.0;
+        qn.coeffRef(0, 0) += -S_corridor * corridor_x;
+        qn.coeffRef(2, 0) += -S_corridor * corridor_y;
+      }
+      
+      double S_muti = 0.3;
+      double x2 = obs_path.poses[horizon - 1].pose.position.x;
+      double y2 = obs_path.poses[horizon - 1].pose.position.y;
+      double x1 = obs_path.poses[0].pose.position.x;
+      double y1 = obs_path.poses[0].pose.position.y;
+      double vert_x = y2 - y1;
+      double vert_y = -(x2 - x1);
+      double d2 = vert_x * vert_x + vert_y * vert_y;
+      Qn.coeffRef(0, 0) -= S_muti * vert_x * vert_x / d2;
+      Qn.coeffRef(0, 2) -= S_muti * vert_x * vert_y / d2;
+      Qn.coeffRef(2, 2) -= S_muti * vert_y * vert_y / d2;
+      Qn.coeffRef(2, 0) -= S_muti * vert_x * vert_y / d2;
+      qn.coeffRef(0, 0) -= S_muti * (-x1 * vert_x * vert_x - vert_x * vert_y * y1) / d2;
+      qn.coeffRef(2, 0) -= S_muti * (-y1 * vert_y * vert_x - vert_x * vert_y * x1) / d2;
     }
     sp::colMajor::setBlock(Q, Qn, state_dim_ * i, state_dim_ * i);
     sp::colMajor::setBlock(q, qn, state_dim_ * i, 0);
@@ -404,7 +470,7 @@ void Mpcc::GetErrorInfo(const Resample& referenceline, const Stage& stage,
 
 void Mpcc::SolveQp(const Resample& referenceline, const Map& map, const Config& config,
     Eigen::SparseMatrix<double> state, nav_msgs::Path& ego_path,
-    const nav_msgs::Path& obs_path) {
+    const nav_msgs::Path& obs_path, const nav_msgs::Odometry obs_odom) {
   geometry_msgs::Point tmpPoint;
   geometry_msgs::Vector3 tmpVector;
   // 用来调pid
@@ -452,7 +518,7 @@ void Mpcc::SolveQp(const Resample& referenceline, const Map& map, const Config& 
   // 设置约束
   SetConstrains(referenceline, map, state, config, ego_path, obs_path);
   // 设置QP矩阵
-  CalculateCost(referenceline, config, state, ego_path, obs_path);
+  CalculateCost(referenceline, config, state, ego_path, obs_path, obs_odom, map);
   // 更新QP矩阵
   osqpInterface.updateMatrices(H, f, A, b, C, clow, cupp, ul, uu);
   // QP求解
