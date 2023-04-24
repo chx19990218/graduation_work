@@ -9,7 +9,8 @@
 // TODO ：维度逐渐增加
 
 void Mpcc::SetConstrains(const Resample& referenceline, const Map& map,
-    Eigen::SparseMatrix<double> state, const Config& config) {
+    Eigen::SparseMatrix<double> state, const Config& config,
+    const nav_msgs::Path& ego_path, const nav_msgs::Path& obs_path) {
   // 走廊边界限制
   for (int i = 0; i < horizon; i++) {
     double x = stage[i].state[0];
@@ -36,6 +37,14 @@ void Mpcc::SetConstrains(const Resample& referenceline, const Map& map,
   sp::colMajor::setBlock(C, C_temp, 0, 0);
   sp::colMajor::setBlock(cupp, cupp_temp, 0, 0);
   sp::colMajor::setBlock(clow, clow_temp, 0, 0);
+
+  Eigen::SparseMatrix<double> dmpc_C(1, horizon * control_dim_);
+  Eigen::SparseMatrix<double> dmpc_l(1, 1);
+  Eigen::SparseMatrix<double> dmpc_u(1, 1);
+  bool dmpc_flag = CalcuDMPC(ego_path, obs_path, state, dmpc_C, dmpc_l, dmpc_u);
+  sp::colMajor::setRows(C, dmpc_C, 4 * horizon);
+  sp::colMajor::setRows(clow, dmpc_l, 4 * horizon);
+  sp::colMajor::setRows(cupp, dmpc_u, 4 * horizon);
 }
 
 std::vector<double> Mpcc::GetPointBorderConstrain(const Map& map, double x,

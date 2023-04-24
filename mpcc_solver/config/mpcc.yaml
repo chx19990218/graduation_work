@@ -3,24 +3,24 @@ ctrl_rate : 50
 # 实飞/仿真 切换，主要确定odom来源
 simulation_flag : true
 # 记录日志
-log_flag : true
+log_flag : false
 
 # 圆形整定pid
 circle_test_flag : false
 circle_test_v : 1.0
 
 # constrains
-theta_dot_upper_limit : 1.0
-angle_upper_limit : 5.0  # deg
+# theta_dot_upper_limit : 1.0
+angle_upper_limit : 45.0  # deg
 
 # mpcc
 horizon : 25
 end_gain_rate : 2.0 # ec, el param rate of end point
-w_c : 5.0
+w_c : 2.0
 w_l : 20.0
 gamma : 10.0
 w_u : 0.01
-w_deltau : 0.005
+w_deltau : 0.001
 
 # reference line
 N_SPLINE : 5000
@@ -33,8 +33,10 @@ obs_penalty_valid : false
 Qobs : 0.3
 obs_x : -1.3
 obs_y : -1.1
-obs_x_r : 0.1 # 退化成一个点
-obs_y_r : 0.3
+# obs_x_r : 0.1 # 退化成一个点
+# obs_y_r : 0.3
+obs_x_r : 0.12 # 退化成一个点
+obs_y_r : 0.12
 
 # generate map
 generate_pcd_map_flag : false

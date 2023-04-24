@@ -33,6 +33,7 @@ class Config {
   bool log_flag;
   int ctrl_rate;
   int horizon;
+  int group_index;
 
   Config(const ros::NodeHandle& nh) {
     nh.getParam("theta_dot_upper_limit", theta_dot_upper_limit);
@@ -61,5 +62,6 @@ class Config {
     nh.getParam("log_flag", log_flag);
     nh.getParam("circle_test_flag", circle_test_flag);
     nh.getParam("circle_test_v", circle_test_v);
+    nh.getParam("group_index", group_index);
   }
 };

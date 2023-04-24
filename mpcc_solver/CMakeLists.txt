@@ -47,6 +47,7 @@ add_executable(mpcc_node
   src/mpcc/constrains.cpp
   src/mpcc/chance_constrains.cpp
   src/mpcc/osqp_interface.cpp
+  src/mpcc/dmpc.cpp
   src/obstacle/obstacle.cpp
   src/referenceline/search.cpp
   src/referenceline/smooth.cpp

@@ -8,6 +8,7 @@
 #include <eigen3/Eigen/Sparse>
 
 #include <quadrotor_msgs/PositionCommand.h>
+#include <nav_msgs/Path.h>
 
 #include "osqp_interface.h"
 #include "resample.h"
@@ -88,6 +89,9 @@ class Mpcc {
   // std::vector<std::vector<double>> obstacle_pos_{
   //     {-1.6, -1.2}, {-1.0, -1.2}, {-1.0, -1.0}, {-1.6, -1.0}};
 
+  nav_msgs::Path ego_path;
+  nav_msgs::Path obs_path;
+
   quadrotor_msgs::PositionCommand cmdMsg;
 
   bool mpcc_valid_flag_ = false;
@@ -97,21 +101,26 @@ class Mpcc {
   ros::Time start_test_time;
 
   int output_index = 0;
+  double uav_size = 0.1;
+  double buffer = 0.02;
 
   Mpcc(const Config& config);
   void Init(const Resample& referenceline, Eigen::SparseMatrix<double> state,
-      const Config& config);
+      const Config& config, nav_msgs::Path& ego_path);
   void UpdateState(const Resample& referenceline, Eigen::SparseMatrix<double>& state);
   void CalculateCost(const Resample& referenceline, const Config& config,
-    Eigen::SparseMatrix<double> state);
+    Eigen::SparseMatrix<double> state, const nav_msgs::Path& ego_path,
+    const nav_msgs::Path& obs_path);
   void RecedeOneHorizon(const Resample& referenceline);
   void SolveQp(const Resample& referenceline, const Map& map, const Config& config,
-    Eigen::SparseMatrix<double> state);
+    Eigen::SparseMatrix<double> state, nav_msgs::Path& ego_path, const nav_msgs::Path& obs_path);
   int GetStage(const Map& map, double x, double y);
   bool InRec(std::vector<std::vector<double>>& rec, double x, double y);
   bool InQuad(std::vector<std::vector<double>>& rec, double x, double y);
+  bool RectOverlap(std::vector<std::vector<double>>& rec1, std::vector<std::vector<double>>& rec2);
   void SetConstrains(const Resample& referenceline, const Map& map,
-    Eigen::SparseMatrix<double> state, const Config& config);
+    Eigen::SparseMatrix<double> state, const Config& config,
+    const nav_msgs::Path& ego_path, const nav_msgs::Path& obs_path);
   std::vector<double> GetPointBorderConstrain(const Map& map, double x,
                                               double, const Resample& referenceline, const Config& config);
   std::vector<double> GetVerticalPoint(double x1, double y1, double x2,
@@ -131,4 +140,9 @@ class Mpcc {
   bool InCorridorRange(const Map& map, double x, double y);
   double GetKappa(std::vector<std::vector<double>> points);
   void CircleTest(Eigen::SparseMatrix<double> state, std::vector<double>& cmd, const Config& config);
+  int CheckCollision(const nav_msgs::Path& ego_path, const nav_msgs::Path& obs_path);
+  bool CalcuDMPC(const nav_msgs::Path& ego_path, const nav_msgs::Path& obs_path,
+                     Eigen::SparseMatrix<double> state,
+                     Eigen::SparseMatrix<double>& Cu, Eigen::SparseMatrix<double>& ulow,
+                     Eigen::SparseMatrix<double>& uup);
 };

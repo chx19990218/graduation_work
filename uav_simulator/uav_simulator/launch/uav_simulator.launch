@@ -15,6 +15,9 @@
   <node pkg="nodelet" type="nodelet" name="so3_quadrotor"
     args="load so3_quadrotor/Nodelet manager" output="screen">
     <rosparam file="$(find uav_simulator)/config/so3_quadrotor.yaml"/>
+    <param name = "init_x" value = "0.0"/>
+    <param name = "init_y" value = "-1.3"/>
+    <param name = "init_z" value = "0.0"/>
     <remap from="~odom" to="odom"/>
     <remap from="~imu"  to="imu" />
     <remap from="~so3cmd" to="so3cmd"/>
@@ -32,6 +35,42 @@
   <node pkg="mpcc_solver" name="mpcc_node" type="mpcc_node" output="screen">
     <remap from="~odom" to="odom"/>
     <remap from="~position_cmd" to="position_cmd"/>
+    <param name = "theta_dot_upper_limit" value = "1.0"/>
+    <param name = "group_index" value = "0"/>
+    <rosparam command="load" file="$(find mpcc_solver)/config/mpcc.yaml" />
+  </node>
+
+</group>
+
+<group ns="drone1">
+
+  <node pkg="nodelet" type="nodelet" name="manager" args="manager" output="screen"/>
+
+  <node pkg="nodelet" type="nodelet" name="so3_quadrotor"
+    args="load so3_quadrotor/Nodelet manager" output="screen">
+    <rosparam file="$(find uav_simulator)/config/so3_quadrotor.yaml"/>
+    <param name = "init_x" value = "0.0"/>
+    <param name = "init_y" value = "1.3"/>
+    <param name = "init_z" value = "0.0"/>
+    <remap from="~odom" to="odom"/>
+    <remap from="~imu"  to="imu" />
+    <remap from="~so3cmd" to="so3cmd"/>
+    <remap from="~vis" to="vis"/>
+  </node>
+  <node pkg="nodelet" type="nodelet" name="so3_controller"
+    args="load so3_controller/Nodelet manager" output="screen">
+    <rosparam file="$(find uav_simulator)/config/so3_controller.yaml"/>
+    <remap from="~odom" to="odom"/>
+    <remap from="~imu"  to="imu" />
+    <remap from="~so3cmd" to="so3cmd"/>
+    <remap from="~position_cmd" to="position_cmd"/>
+  </node>
+
+  <node pkg="mpcc_solver" name="mpcc_node" type="mpcc_node" output="screen">
+    <remap from="~odom" to="odom"/>
+    <remap from="~position_cmd" to="position_cmd"/>
+    <param name = "theta_dot_upper_limit" value = "3.0"/>
+    <param name = "group_index" value = "1"/>
     <rosparam command="load" file="$(find mpcc_solver)/config/mpcc.yaml" />
   </node>
 

@@ -70,10 +70,10 @@ Mpcc::Mpcc(const Config& config) {
   for (int i = 0; i < horizon; i++) {
     progress.coeffRef(control_dim_ * i + control_dim_ - 1, 0) = Ts;
   }
-
-  C.resize(4 * horizon, BB.cols());
-  cupp.resize(4 * horizon, 1);
-  clow.resize(4 * horizon, 1);
+  // add dmpc
+  C.resize(4 * horizon + 1, BB.cols());
+  cupp.resize(4 * horizon + 1, 1);
+  clow.resize(4 * horizon + 1, 1);
   // 加速度/角度,里程速度限制限制
   double max_attitude = config.angle_upper_limit * PI / 180.0;
   double max_a = 9.8 * std::tan(max_attitude);
@@ -101,8 +101,9 @@ Mpcc::Mpcc(const Config& config) {
 }
 
 void Mpcc::Init(const Resample& referenceline, Eigen::SparseMatrix<double> state,
-    const Config& config) {
+    const Config& config, nav_msgs::Path& ego_path) {
   if (init_flag) {
+    output_index = 0;
     max_theta_ = referenceline.spline.getLength(); 
     optimal_theta.clear();
     stage.clear();
@@ -122,6 +123,28 @@ void Mpcc::Init(const Resample& referenceline, Eigen::SparseMatrix<double> state
       Stage stage_i(new_state);
       stage.emplace_back(stage_i);
       optimal_theta.emplace_back(theta);
+
+      statePredict.coeffRef(0, i) = pos_xy[0];
+      statePredict.coeffRef(1, i) = std::cos(phi) * a * i * Ts;
+      statePredict.coeffRef(2, i) = pos_xy[1];
+      statePredict.coeffRef(3, i) = std::sin(phi) * a * i * Ts;
+      statePredict.coeffRef(4, i) = theta;
+      ego_path.poses.resize(horizon);
+      for (int i = 0; i < horizon; i++) {
+        ego_path.poses[i].pose.position.x = statePredict.coeffRef(0, i);
+        ego_path.poses[i].pose.position.y = statePredict.coeffRef(2, i);
+        ego_path.poses[i].pose.position.z = config.hover_height;
+
+        double psi = atan2(statePredict.coeffRef(3, i), statePredict.coeffRef(1, i));
+        Eigen::Quaterniond q = Eigen::AngleAxisd(psi, ::Eigen::Vector3d::UnitZ()) *
+          Eigen::AngleAxisd(0.0, ::Eigen::Vector3d::UnitY()) *
+          Eigen::AngleAxisd(0.0, ::Eigen::Vector3d::UnitX());
+        ego_path.poses[i].pose.orientation.x = q.x();
+        ego_path.poses[i].pose.orientation.y = q.y();
+        ego_path.poses[i].pose.orientation.z = q.z();
+        ego_path.poses[i].pose.orientation.w = q.w();
+      }
+      // ego_path_time = ros::Time::now();
     }
     init_flag = false;
   }
@@ -174,7 +197,8 @@ void Mpcc::RecedeOneHorizon(const Resample& referenceline) {
 }
 
 void Mpcc::CalculateCost(const Resample& referenceline, const Config& config,
-    Eigen::SparseMatrix<double> state) {
+    Eigen::SparseMatrix<double> state, const nav_msgs::Path& ego_path,
+    const nav_msgs::Path& obs_path) {
       //20 10 50
   double w_c = config.w_c;
   double w_l = config.w_l;
@@ -259,10 +283,17 @@ void Mpcc::CalculateCost(const Resample& referenceline, const Config& config,
                Eigen::SparseMatrix<double>(dEl.transpose());
     }
     // obs penalty
+    int collision_index = CheckCollision(ego_path, obs_path);
+    // config.obs_penalty_valid = (collision_index != -1);
     double Sobs = config.Qobs;
     double x0 = config.obs_x;
     double y0 = config.obs_y;
-    if (config.obs_penalty_valid) {
+    // if (config.obs_penalty_valid) {
+    if (collision_index != -1) {
+      x0 = (ego_path.poses[collision_index].pose.position.x + 
+        obs_path.poses[collision_index].pose.position.x) / 2.0;
+      y0 = (ego_path.poses[collision_index].pose.position.y + 
+        obs_path.poses[collision_index].pose.position.y) / 2.0;
       std::vector<double> obst{x0, y0};
       std::vector<double> ego{stage[i].state[0], stage[i].state[2]};
       std::vector<double> coeff(6, 0.0);
@@ -372,10 +403,10 @@ void Mpcc::GetErrorInfo(const Resample& referenceline, const Stage& stage,
 }
 
 void Mpcc::SolveQp(const Resample& referenceline, const Map& map, const Config& config,
-    Eigen::SparseMatrix<double> state) {
+    Eigen::SparseMatrix<double> state, nav_msgs::Path& ego_path,
+    const nav_msgs::Path& obs_path) {
   geometry_msgs::Point tmpPoint;
   geometry_msgs::Vector3 tmpVector;
-  
   // 用来调pid
   std::vector<double> cmd(6, 0.0);
   if (config.circle_test_flag) {
@@ -415,13 +446,13 @@ void Mpcc::SolveQp(const Resample& referenceline, const Map& map, const Config& 
     return;
   }
   // 初始划轨迹
-  Init(referenceline, state, config);
+  Init(referenceline, state, config, ego_path);
   // 更新一步
   RecedeOneHorizon(referenceline);
   // 设置约束
-  SetConstrains(referenceline, map, state, config);
+  SetConstrains(referenceline, map, state, config, ego_path, obs_path);
   // 设置QP矩阵
-  CalculateCost(referenceline, config, state);
+  CalculateCost(referenceline, config, state, ego_path, obs_path);
   // 更新QP矩阵
   osqpInterface.updateMatrices(H, f, A, b, C, clow, cupp, ul, uu);
   // QP求解

@@ -22,6 +22,7 @@
 
 void odom_callback(const nav_msgs::Odometry& odom);
 void optitrack_callback(const geometry_msgs::PoseStamped& odom);
+void obs_callback(const nav_msgs::Path& path);
 void publish_topic(Mpcc& mpcc, const Resample& resample, const Config& config);
 
 // 动捕卡尔曼速度
@@ -45,6 +46,8 @@ geometry_msgs::PoseStamped tmpPose;
 geometry_msgs::Point pt;
 visualization_msgs::Marker drone_msg;
 visualization_msgs::Marker theta_msg;
+nav_msgs::Path ego_path, obs_path;
+ros::Time ego_path_time, obs_path_time;
 
 ros::Time last_odom_time;
 ros::Time last_nokov_time;
@@ -62,13 +65,15 @@ int main(int argc, char** argv) {
   ros::Subscriber sub_odom = n.subscribe("odom", 100, odom_callback, ros::TransportHints().tcpNoDelay());
   ros::Subscriber optitrack_odom = n.subscribe("/mavros/vision_pose/pose", 100, optitrack_callback,
     ros::TransportHints().tcpNoDelay());
+  std::string obs_topic = "/drone" + std::to_string(1 - config.group_index) + "/predict_path";
+  ros::Subscriber obs_sub = n.subscribe(obs_topic, 100, obs_callback, ros::TransportHints().tcpNoDelay());
   refer_pub = n.advertise<nav_msgs::Path>("refer_path", 1);
   cmd_pub = n.advertise<quadrotor_msgs::PositionCommand>("position_cmd",1);
   drone_pub = n.advertise<visualization_msgs::Marker>("drone_pose", 1);
   theta_pub = n.advertise<visualization_msgs::Marker>("theta_pose", 1);
   predict_pub = n.advertise<nav_msgs::Path>("predict_path", 1);
   theta_predict_pub = n.advertise<nav_msgs::Path>("theta_predict_path", 1);
-  px4_pub = n.advertise<mavros_msgs::PositionTarget>("mavros/setpoint_raw/local", 1);
+  px4_pub = n.advertise<mavros_msgs::PositionTarget>("/mavros/setpoint_raw/local", 1);
 
   theta_trajPred_msg.header.frame_id = "world";
   trajPred_msg.header.frame_id = "world";
@@ -94,7 +99,7 @@ int main(int argc, char** argv) {
   Obstacle obstacle;
   Plot plot;
   Mpcc mpcc(config);
-
+  // Dmpc dmpc;
   ros::Rate rate(config.ctrl_rate);
 
   // 生成pcd地图，覆盖掉原始pcd
@@ -123,6 +128,11 @@ int main(int argc, char** argv) {
   auto smooth_end_time = ros::Time::now();
   std::cout << "3. smooth finished in "
     << (smooth_end_time - smooth_start_time).toSec() << "s" << std::endl;
+  
+  if (config.group_index == 1) {
+    // reverse(smooth.result_x.begin(), smooth.result_x.end());
+    // reverse(smooth.result_y.begin(), smooth.result_y.end());
+  }
 
   // 4. fit and resample
   auto resample_start_time = ros::Time::now();
@@ -141,7 +151,6 @@ int main(int argc, char** argv) {
     tmpPose.pose.position.z = config.hover_height;
     refTraj_msg.poses.push_back(tmpPose);
   }
-  refer_pub.publish(refTraj_msg);
 
   ros::spinOnce();
 
@@ -156,15 +165,10 @@ int main(int argc, char** argv) {
   while (ros::ok()) {
     ros::Time mpcc_start_time = ros::Time::now();
     i++;
+    refer_pub.publish(refTraj_msg);
     ros::spinOnce();
     rate.sleep();
     mpcc.UpdateState(resample, state);
-
-    if ((ros::Time::now() - last_odom_time).toSec() > 0.1) {
-      mpcc.mpcc_valid_flag_ = false;
-    } else {
-      mpcc.mpcc_valid_flag_ = true;
-    }
     
     // 检查是否在走廊范围内
     bool in_corridor_range = mpcc.InCorridorRange(map, state.coeffRef(0, 0), state.coeffRef(2, 0));
@@ -182,13 +186,18 @@ int main(int argc, char** argv) {
         mpcc.init_flag = true;
       }
     }
-    
+    // std::cout << "before:" << config.group_index << "," << in_corridor_range << "," << mpcc.output_index
+    //   << "," << mpcc.init_flag << "," << mpcc.mpcc_valid_flag_ << std::endl;
     // ros::Time qp_start_time = ros::Time::now();
-    mpcc.SolveQp(resample, map, config, state);
+    mpcc.SolveQp(resample, map, config, state, ego_path, obs_path);
+
+    // std::cout << "after:" << config.group_index << "," << in_corridor_range << "," << mpcc.output_index
+    //   << "," << mpcc.init_flag << "," << mpcc.mpcc_valid_flag_ << std::endl;
     // double qp_time = (ros::Time::now() - qp_start_time).toSec();
 
     mpcc.x_history.emplace_back(state.coeffRef(0, 0));
     mpcc.y_history.emplace_back(state.coeffRef(2, 0));
+
     publish_topic(mpcc, resample, config);
 
     // record log
@@ -198,7 +207,7 @@ int main(int argc, char** argv) {
     
     double mpcc_time = (ros::Time::now() - mpcc_start_time).toSec();
     if (i % 10 == 0) {
-      std::cout << "mpcc time  : " << mpcc_time << std::endl;
+      // std::cout << "mpcc time  : " << mpcc_time << std::endl;
       // std::cout << "qp time : " << qp_time << std::endl;
     }
   }
@@ -250,6 +259,11 @@ void optitrack_callback(const geometry_msgs::PoseStamped& odom) {
   }
 }
 
+void obs_callback(const nav_msgs::Path& path) {
+  obs_path = path;
+  obs_path_time = ros::Time::now();
+}
+
 void publish_topic(Mpcc& mpcc, const Resample& resample, const Config& config) {
   // 控制指令
   cmd_pub.publish(mpcc.cmdMsg);
@@ -288,6 +302,15 @@ void publish_topic(Mpcc& mpcc, const Resample& resample, const Config& config) {
         tmpPose.pose.position.x = mpcc.statePredict.coeffRef(0, i);
         tmpPose.pose.position.y = mpcc.statePredict.coeffRef(2, i);
         tmpPose.pose.position.z = config.hover_height;
+
+        double psi = atan2(mpcc.statePredict.coeffRef(3, i), mpcc.statePredict.coeffRef(1, i));
+        Eigen::Quaterniond q = Eigen::AngleAxisd(psi, ::Eigen::Vector3d::UnitZ()) *
+          Eigen::AngleAxisd(0.0, ::Eigen::Vector3d::UnitY()) *
+          Eigen::AngleAxisd(0.0, ::Eigen::Vector3d::UnitX());
+        tmpPose.pose.orientation.x = q.x();
+        tmpPose.pose.orientation.y = q.y();
+        tmpPose.pose.orientation.z = q.z();
+        tmpPose.pose.orientation.w = q.w();
         trajPred_msg.poses[i] = tmpPose;
       }
       predict_pub.publish(trajPred_msg);
@@ -328,7 +351,7 @@ void publish_topic(Mpcc& mpcc, const Resample& resample, const Config& config) {
       auto pos = resample.spline.getPostion(state.coeffRef(4,0));
       pt.x = pos(0);
       pt.y = pos(1);
-      pt.z = 0.0;
+      pt.z = config.hover_height;
       theta_msg.points.push_back(pt);
       theta_pub.publish(theta_msg);
     }
