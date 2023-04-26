@@ -18,12 +18,16 @@
 #include <visualization_msgs/Marker.h>
 #include <visualization_msgs/MarkerArray.h>
 #include <quadrotor_msgs/PositionCommand.h>
+#include <quadrotor_msgs/Theta.h>
 #include <mavros_msgs/PositionTarget.h>
 
 void odom_callback(const nav_msgs::Odometry& odom);
-void obs_odom_callback(const nav_msgs::Odometry& odom);
+void obs1_odom_callback(const nav_msgs::Odometry& odom);
+void obs2_odom_callback(const nav_msgs::Odometry& odom);
 void optitrack_callback(const geometry_msgs::PoseStamped& odom);
-void obs_callback(const nav_msgs::Path& path);
+void obs1_callback(const nav_msgs::Path& path);
+void obs2_callback(const nav_msgs::Path& path);
+void theta_callback(const quadrotor_msgs::Theta& theta);
 void publish_topic(Mpcc& mpcc, const Resample& resample, const Config& config);
 
 // 动捕卡尔曼速度
@@ -37,7 +41,7 @@ Eigen::MatrixXd P_p, Q_p, F_p, H_p, R_p;
 Eigen::SparseMatrix<double> state(5, 1);
 ros::Time tOdom;
 ros::Publisher drone_pub, theta_pub, predict_pub,
-  theta_predict_pub, cmd_pub, px4_pub, refer_pub;
+  theta_predict_pub, cmd_pub, px4_pub, refer_pub, theta_crowded_pub;
 
 geometry_msgs::Point tmpPoint;
 geometry_msgs::Vector3 tmpVector;
@@ -47,9 +51,10 @@ geometry_msgs::PoseStamped tmpPose;
 geometry_msgs::Point pt;
 visualization_msgs::Marker drone_msg;
 visualization_msgs::Marker theta_msg;
-nav_msgs::Path ego_path, obs_path;
-nav_msgs::Odometry obs_odom;
-ros::Time ego_path_time, obs_path_time;
+nav_msgs::Path ego_path, obs1_path, obs2_path;
+nav_msgs::Odometry obs1_odom, obs2_odom;
+quadrotor_msgs::Theta theta_crowded_msg;
+ros::Time ego_path_time, obs1_path_time, obs2_path_time;
 
 ros::Time last_odom_time;
 ros::Time last_nokov_time;
@@ -65,12 +70,37 @@ int main(int argc, char** argv) {
   Config config(nh);
   simulation_flag = config.simulation_flag;
   ros::Subscriber sub_odom = n.subscribe("odom", 100, odom_callback, ros::TransportHints().tcpNoDelay());
-  std::string obs_odom_topic = "/drone" + std::to_string(1 - config.group_index) + "/odom";
-  ros::Subscriber sub_obs_odom = n.subscribe(obs_odom_topic, 100, obs_odom_callback, ros::TransportHints().tcpNoDelay());
+
+  std::string obs1_odom_topic, obs1_topic, obs2_odom_topic, obs2_topic;
+  if (config.group_index == 0) {
+    obs1_odom_topic = "/drone1/odom";
+    obs1_topic = "/drone1/predict_path";
+    obs2_odom_topic = "/drone2/odom";
+    obs2_topic = "/drone2/predict_path";
+  } else if (config.group_index == 1) {
+    obs1_odom_topic = "/drone0/odom";
+    obs1_topic = "/drone0/predict_path";
+    obs2_odom_topic = "/drone2/odom";
+    obs2_topic = "/drone2/predict_path";
+  } else {
+    obs1_odom_topic = "/drone0/odom";
+    obs1_topic = "/drone0/predict_path";
+    obs2_odom_topic = "/drone1/odom";
+    obs2_topic = "/drone1/predict_path";
+  }
+  
+
+  ros::Subscriber sub_obs1_odom = n.subscribe(obs1_odom_topic, 100, obs1_odom_callback,
+    ros::TransportHints().tcpNoDelay());
+  ros::Subscriber sub_obs2_odom = n.subscribe(obs2_odom_topic, 100, obs2_odom_callback,
+    ros::TransportHints().tcpNoDelay());
+  ros::Subscriber obs1_sub = n.subscribe(obs1_topic, 100, obs1_callback, ros::TransportHints().tcpNoDelay());
+  ros::Subscriber obs2_sub = n.subscribe(obs2_topic, 100, obs2_callback, ros::TransportHints().tcpNoDelay());
+
+  ros::Subscriber theta_sub = n.subscribe("/theta_topic", 100, theta_callback, ros::TransportHints().tcpNoDelay());
+
   ros::Subscriber optitrack_odom = n.subscribe("/mavros/vision_pose/pose", 100, optitrack_callback,
     ros::TransportHints().tcpNoDelay());
-  std::string obs_topic = "/drone" + std::to_string(1 - config.group_index) + "/predict_path";
-  ros::Subscriber obs_sub = n.subscribe(obs_topic, 100, obs_callback, ros::TransportHints().tcpNoDelay());
   refer_pub = n.advertise<nav_msgs::Path>("refer_path", 1);
   cmd_pub = n.advertise<quadrotor_msgs::PositionCommand>("position_cmd",1);
   drone_pub = n.advertise<visualization_msgs::Marker>("drone_pose", 1);
@@ -78,6 +108,7 @@ int main(int argc, char** argv) {
   predict_pub = n.advertise<nav_msgs::Path>("predict_path", 1);
   theta_predict_pub = n.advertise<nav_msgs::Path>("theta_predict_path", 1);
   px4_pub = n.advertise<mavros_msgs::PositionTarget>("/mavros/setpoint_raw/local", 1);
+  theta_crowded_pub = n.advertise<quadrotor_msgs::Theta>("/theta_topic", 1);
 
   theta_trajPred_msg.header.frame_id = "world";
   trajPred_msg.header.frame_id = "world";
@@ -193,7 +224,8 @@ int main(int argc, char** argv) {
     // std::cout << "before:" << config.group_index << "," << in_corridor_range << "," << mpcc.output_index
     //   << "," << mpcc.init_flag << "," << mpcc.mpcc_valid_flag_ << std::endl;
     // ros::Time qp_start_time = ros::Time::now();
-    mpcc.SolveQp(resample, map, config, state, ego_path, obs_path, obs_odom);
+    mpcc.SolveQp(resample, map, config, state, ego_path, obs1_path, obs1_odom, obs2_path, obs2_odom,
+      theta_crowded_msg, theta_crowded_pub);
 
     // std::cout << "after:" << config.group_index << "," << in_corridor_range << "," << mpcc.output_index
     //   << "," << mpcc.init_flag << "," << mpcc.mpcc_valid_flag_ << std::endl;
@@ -233,8 +265,12 @@ void odom_callback(const nav_msgs::Odometry& odom){
   }
 }
 
-void obs_odom_callback(const nav_msgs::Odometry& odom) {
-  obs_odom = odom;
+void obs1_odom_callback(const nav_msgs::Odometry& odom) {
+  obs1_odom = odom;
+}
+
+void obs2_odom_callback(const nav_msgs::Odometry& odom) {
+  obs2_odom = odom;
 }
 
 void optitrack_callback(const geometry_msgs::PoseStamped& odom) {
@@ -267,9 +303,18 @@ void optitrack_callback(const geometry_msgs::PoseStamped& odom) {
   }
 }
 
-void obs_callback(const nav_msgs::Path& path) {
-  obs_path = path;
-  obs_path_time = ros::Time::now();
+void obs1_callback(const nav_msgs::Path& path) {
+  obs1_path = path;
+  obs1_path_time = ros::Time::now();
+}
+
+void obs2_callback(const nav_msgs::Path& path) {
+  obs2_path = path;
+  obs2_path_time = ros::Time::now();
+}
+
+void theta_callback(const quadrotor_msgs::Theta& theta) {
+  theta_crowded_msg = theta;
 }
 
 void publish_topic(Mpcc& mpcc, const Resample& resample, const Config& config) {
@@ -321,6 +366,7 @@ void publish_topic(Mpcc& mpcc, const Resample& resample, const Config& config) {
         tmpPose.pose.orientation.w = q.w();
         trajPred_msg.poses[i] = tmpPose;
       }
+      trajPred_msg.poses[0].header.frame_id = std::to_string(config.group_index);
       ego_path = trajPred_msg;
       predict_pub.publish(trajPred_msg);
 

@@ -41,6 +41,7 @@ add_message_files(
   Replan.msg
   SwarmOdometry.msg
   SwarmInfo.msg
+  Theta.msg
 )
 
 generate_messages(

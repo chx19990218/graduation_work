@@ -53,6 +53,12 @@ void Mpcc::SetConstrains(const Resample& referenceline, const Map& map,
   sp::colMajor::setRows(C, dmpc_C, 4 * horizon);
   sp::colMajor::setRows(clow, dmpc_l, 4 * horizon);
   sp::colMajor::setRows(cupp, dmpc_u, 4 * horizon);
+
+  // 更新下速度上限
+  for (int i = 0; i < horizon; i++) {
+    // theta控制量上限
+    cupp.coeffRef(3 * horizon + i, 0) = max_v;
+  }
 }
 
 std::vector<double> Mpcc::GetPointBorderConstrain(const Map& map, double x,

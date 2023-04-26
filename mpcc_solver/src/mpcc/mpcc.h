@@ -10,6 +10,7 @@
 #include <quadrotor_msgs/PositionCommand.h>
 #include <nav_msgs/Path.h>
 #include <nav_msgs/Odometry.h>
+#include <quadrotor_msgs/Theta.h>
 
 #include "osqp_interface.h"
 #include "resample.h"
@@ -98,7 +99,9 @@ class Mpcc {
   bool mpcc_valid_flag_ = false;
   bool init_flag = true;
   bool start_test_flag = false;
+  bool path_overlap_flag = false; // 与其他有轨迹交互
   double max_cmd_a = 0.0;
+  double max_v = 0.0;
   ros::Time start_test_time;
 
   int output_index = 0;
@@ -113,9 +116,10 @@ class Mpcc {
     Eigen::SparseMatrix<double> state, const nav_msgs::Path& ego_path,
     const nav_msgs::Path& obs_path, const nav_msgs::Odometry obs_odom, const Map& map);
   void RecedeOneHorizon(const Resample& referenceline);
-  void SolveQp(const Resample& referenceline, const Map& map, const Config& config,
-    Eigen::SparseMatrix<double> state, nav_msgs::Path& ego_path, const nav_msgs::Path& obs_path,
-    const nav_msgs::Odometry obs_odom);
+  void SolveQp(const Resample& referenceline, const Map& map,Config& config,
+    Eigen::SparseMatrix<double> state, nav_msgs::Path& ego_path, const nav_msgs::Path& obs1_path,
+    const nav_msgs::Odometry obs1_odom, const nav_msgs::Path& obs2_path, const nav_msgs::Odometry obs2_odom,
+    quadrotor_msgs::Theta& theta_crowded_msg, ros::Publisher& theta_crowded_pub);
   int GetStage(const Map& map, double x, double y);
   bool InRec(std::vector<std::vector<double>>& rec, double x, double y);
   bool InQuad(std::vector<std::vector<double>>& rec, double x, double y);
