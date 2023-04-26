@@ -197,6 +197,7 @@ int main(int argc, char** argv) {
   }
 
   int i = 0;
+  mpcc.start_time = ros::Time::now();
   while (ros::ok()) {
     ros::Time mpcc_start_time = ros::Time::now();
     i++;

@@ -197,8 +197,8 @@ void Mpcc::RecedeOneHorizon(const Resample& referenceline) {
 }
 
 void Mpcc::CalculateCost(const Resample& referenceline, const Config& config,
-    Eigen::SparseMatrix<double> state, const nav_msgs::Path& ego_path,
-    const nav_msgs::Path& obs_path, const nav_msgs::Odometry obs_odom, const Map& map) {
+    Eigen::SparseMatrix<double> state, const nav_msgs::Path& ego_path, const Map& map,
+    quadrotor_msgs::Theta& theta_crowded_msg, ros::Publisher& theta_crowded_pub) {
       //20 10 50
   double w_c = config.w_c;
   double w_l = config.w_l;
@@ -284,18 +284,17 @@ void Mpcc::CalculateCost(const Resample& referenceline, const Config& config,
            2 * gain * w_l * (error[1] - l.coeffRef(0, 0)) *
                Eigen::SparseMatrix<double>(dEl.transpose());
     }
-    // obs penalty
+    // 机会约束躲避障碍物
     int collision_index = CheckCollision(ego_path, obs_path);
-    // config.obs_penalty_valid = (collision_index != -1);
     double Sobs = config.Qobs;
     double x0 = config.obs_x;
     double y0 = config.obs_y;
     if (config.obs_penalty_valid) {
     // if (collision_index != -1) {
-      x0 = (ego_path.poses[collision_index].pose.position.x + 
-        obs_path.poses[collision_index].pose.position.x) / 2.0;
-      y0 = (ego_path.poses[collision_index].pose.position.y + 
-        obs_path.poses[collision_index].pose.position.y) / 2.0;
+      // x0 = (ego_path.poses[collision_index].pose.position.x + 
+      //   obs_path.poses[collision_index].pose.position.x) / 2.0;
+      // y0 = (ego_path.poses[collision_index].pose.position.y + 
+      //   obs_path.poses[collision_index].pose.position.y) / 2.0;
       std::vector<double> obst{x0, y0};
       std::vector<double> ego{stage[i].state[0], stage[i].state[2]};
       std::vector<double> coeff(6, 0.0);
@@ -319,8 +318,8 @@ void Mpcc::CalculateCost(const Resample& referenceline, const Config& config,
       qn.coeffRef(0, 0) += -Sobs * p11;
       qn.coeffRef(2, 0) += -Sobs * p12;
     }
-    double r = std::sqrt(std::pow(obs_odom.pose.pose.position.x - state.coeffRef(0, 0), 2) +
-      std::pow(obs_odom.pose.pose.position.y - state.coeffRef(2, 0), 2));
+    // 多机相互避障
+    path_overlap_flag = false;
     if (obs_path.poses.size() > 0 && path_overlap_flag) {
       int stage_index = GetStage(map, stage[i].state[0], stage[i].state[2]);
       if (stage_index >= 0) {
@@ -370,6 +369,70 @@ void Mpcc::CalculateCost(const Resample& referenceline, const Config& config,
       qn.coeffRef(0, 0) -= S_muti * (-x1 * vert_x * vert_x - vert_x * vert_y * y1) / d2;
       qn.coeffRef(2, 0) -= S_muti * (-y1 * vert_y * vert_x - vert_x * vert_y * x1) / d2;
     }
+    // 编队
+    max_v = 2.0; // leader uav0 --- 2m/s
+    double S_cluster = 10.0;
+    double S_rejection = 2.0;
+    if (config.group_index != 0) {
+      if (cluster_flag) {
+        clutter_index = theta_crowded_msg.index;
+        // 相似性
+        double relative_theta = referenceline.spline.porjectOnSpline(
+          leader_path.poses[i].pose.position.x, leader_path.poses[i].pose.position.y);
+        auto dpos_xy = referenceline.spline.getDerivative(relative_theta);
+        double relative_phi = atan2(dpos_xy(1), dpos_xy(0));
+        double relative_x, relative_y;
+        if (config.group_index == 1) {
+          relative_x = leader_path.poses[i].pose.position.x +
+            leader.vec[clutter_index][0] * std::cos(relative_phi) - leader.vec[clutter_index][1] * std::sin(relative_phi);
+          relative_y = leader_path.poses[i].pose.position.y +
+            leader.vec[clutter_index][0] * std::sin(relative_phi) + leader.vec[clutter_index][1] * std::cos(relative_phi);
+        } else {
+          relative_x = leader_path.poses[i].pose.position.x +
+            leader.vec[clutter_index][2] * std::cos(relative_phi) - leader.vec[clutter_index][3] * std::sin(relative_phi);
+          relative_y = leader_path.poses[i].pose.position.y +
+            leader.vec[clutter_index][2] * std::sin(relative_phi) + leader.vec[clutter_index][3] * std::cos(relative_phi);
+        }
+        Qn.coeffRef(0, 0) += S_cluster * 1.0;
+        Qn.coeffRef(2, 2) += S_cluster * 1.0;
+        qn.coeffRef(0, 0) += -S_cluster * relative_x;
+        qn.coeffRef(2, 0) += -S_cluster * relative_y;
+        // 排斥性
+        double rejection_x = obs_path.poses[i].pose.position.x;
+        double rejection_y = obs_path.poses[i].pose.position.y;
+        Qn.coeffRef(0, 0) -= S_rejection * 1.0;
+        Qn.coeffRef(2, 2) -= S_rejection * 1.0;
+        qn.coeffRef(0, 0) -= -S_rejection * rejection_x;
+        qn.coeffRef(2, 0) -= -S_rejection * rejection_y;
+        rejection_x = leader_path.poses[i].pose.position.x;
+        rejection_y = leader_path.poses[i].pose.position.y;
+        Qn.coeffRef(0, 0) -= S_rejection * 1.0;
+        Qn.coeffRef(2, 2) -= S_rejection * 1.0;
+        qn.coeffRef(0, 0) -= -S_rejection * rejection_x;
+        qn.coeffRef(2, 0) -= -S_rejection * rejection_y;
+
+        max_v = 2.5;
+      } else {
+        max_v = 0.5;
+      }
+    } else {
+      // 循环队形
+      if ((ros::Time::now() - start_time).toSec() < 10.0) {
+        start_clutter_time = ros::Time::now();
+      }
+      double clutter_time = (ros::Time::now() - start_clutter_time).toSec();
+      if (clutter_time > 5.0) {
+        clutter_index++;
+        start_clutter_time = ros::Time::now();
+        if (clutter_index >= leader.vec.size()) {
+          clutter_index = 0;
+        }
+      }
+      theta_crowded_msg.index = clutter_index;
+      theta_crowded_pub.publish(theta_crowded_msg);
+    }
+
+
     sp::colMajor::setBlock(Q, Qn, state_dim_ * i, state_dim_ * i);
     sp::colMajor::setBlock(q, qn, state_dim_ * i, 0);
   }
@@ -504,85 +567,18 @@ void Mpcc::SolveQp(const Resample& referenceline, const Map& map, Config& config
   Init(referenceline, state, config, ego_path);
   // 更新一步
   RecedeOneHorizon(referenceline);
-  // 多机碰撞检测
-  // MutiCollisionCheck()
-  double theta_buffer = 0.1;
-  double ego_start_theta = referenceline.spline.porjectOnSpline(stage[0].state[0], stage[0].state[2]) - theta_buffer;
-  double ego_end_theta = referenceline.spline.porjectOnSpline(stage[horizon - 1].state[0],
-                                                                stage[horizon - 1].state[2]) + theta_buffer;
-  if (ego_start_theta > ego_end_theta) {
-    ego_end_theta += max_theta_;
-  }
-
-  double obs1_start_theta, obs1_end_theta, obs2_start_theta, obs2_end_theta;
-
-  bool ego_obs1_overlap_flag = false;
-  if (obs1_path.poses.size() > 0) {
-    obs1_start_theta = referenceline.spline.porjectOnSpline(obs1_path.poses[0].pose.position.x,
-                                                                  obs1_path.poses[0].pose.position.y) - theta_buffer;
-    obs1_end_theta = referenceline.spline.porjectOnSpline(obs1_path.poses[horizon -1].pose.position.x,
-                                                                obs1_path.poses[horizon -1].pose.position.y) + theta_buffer;
-    if (obs1_start_theta > obs1_end_theta) {
-      obs1_end_theta += max_theta_;
-    }
-    ego_obs1_overlap_flag = (ego_end_theta >= obs1_start_theta && ego_end_theta <= obs1_end_theta) ||
-      (obs1_end_theta >= ego_start_theta && obs1_end_theta <= ego_end_theta);
-  }
-
-  bool ego_obs2_overlap_flag = false;
-  if (obs2_path.poses.size() > 0) {
-    obs2_start_theta = referenceline.spline.porjectOnSpline(obs2_path.poses[0].pose.position.x,
-                                                                  obs2_path.poses[0].pose.position.y) - theta_buffer;
-    obs2_end_theta = referenceline.spline.porjectOnSpline(obs2_path.poses[horizon -1].pose.position.x,
-                                                                obs2_path.poses[horizon -1].pose.position.y) + theta_buffer;
-    if (obs2_start_theta > obs2_end_theta) {
-      obs2_end_theta += max_theta_;
-    }
-    ego_obs2_overlap_flag = (ego_end_theta >= obs2_start_theta && ego_end_theta <= obs2_end_theta) ||
-      (obs2_end_theta >= ego_start_theta && obs2_end_theta <= ego_end_theta);
-  }
-
-  bool obs1_obs2_overlap_flag = false;
-  if (obs1_path.poses.size() > 0 && obs2_path.poses.size() > 0) {
-    obs1_obs2_overlap_flag = (obs1_end_theta >= obs2_start_theta && obs1_end_theta <= obs2_end_theta) ||
-      (obs2_end_theta >= obs1_start_theta && obs2_end_theta <= obs1_end_theta);
-  }
-
-  nav_msgs::Path obs_path;
-  nav_msgs::Odometry obs_odom;
-  if (!ego_obs1_overlap_flag && !ego_obs2_overlap_flag) {
-    if (!obs1_obs2_overlap_flag) {
-      // 都无交互
-      max_v = config.theta_dot_upper_limit;
-    } else {
-      // 其他有交互
-      max_v = config.theta_dot_upper_limit / 2.0;
-    }
-    path_overlap_flag = false;
-  } else if (ego_obs1_overlap_flag && ego_obs2_overlap_flag) {
-    max_v = config.theta_dot_upper_limit;
-    if (config.group_index == 1) {
-      path_overlap_flag = false;
-    } else if (config.group_index == 0) {
-      path_overlap_flag = true;
-      obs_path = obs2_path;
-      obs_odom = obs2_odom;
-    } else {
-      path_overlap_flag = true;
-      obs_path = obs1_path;
-      obs_odom = obs1_odom;
-    }
-  } else {
-    obs_path = ego_obs1_overlap_flag ? obs1_path : obs2_path;
-    obs_odom = ego_obs1_overlap_flag ? obs1_odom : obs2_odom;
-    path_overlap_flag = true;
-    max_v = config.theta_dot_upper_limit;
-  }
-
+  // 多机相互避障
+  MutiCollisionCheck(referenceline, config, state, ego_path, obs1_path, obs1_odom,
+    obs2_path, obs2_odom);
+  // 多机编队, 变true不变回来了
+  if (ClusterFormation(referenceline, config, state, ego_path, obs1_path, obs1_odom,
+    obs2_path, obs2_odom)){
+    cluster_flag = true;
+  };
+  // 设置QP矩阵
+  CalculateCost(referenceline, config, state, ego_path, map, theta_crowded_msg, theta_crowded_pub);
   // 设置约束
   SetConstrains(referenceline, map, state, config, ego_path, obs_path);
-  // 设置QP矩阵
-  CalculateCost(referenceline, config, state, ego_path, obs_path, obs_odom, map);
   // 更新QP矩阵
   osqpInterface.updateMatrices(H, f, A, b, C, clow, cupp, ul, uu);
   // QP求解
@@ -658,6 +654,102 @@ void Mpcc::SolveQp(const Resample& referenceline, const Map& map, Config& config
   // max_cmd_a = std::max({max_cmd_a, std::fabs(inputPredict.coeffRef(0, output_index)),
   //   std::fabs(inputPredict.coeffRef(1, output_index))});
   // std::cout << output_index <<  std::endl;
+}
+
+void Mpcc::MutiCollisionCheck(const Resample& referenceline, Config& config,
+    Eigen::SparseMatrix<double> state, nav_msgs::Path& ego_path, const nav_msgs::Path& obs1_path,
+    const nav_msgs::Odometry obs1_odom, const nav_msgs::Path& obs2_path,
+    const nav_msgs::Odometry obs2_odom) {
+  double theta_buffer = 0.1;
+  double ego_start_theta = referenceline.spline.porjectOnSpline(stage[0].state[0], stage[0].state[2]) - theta_buffer;
+  double ego_end_theta = referenceline.spline.porjectOnSpline(stage[horizon - 1].state[0],
+                                                                stage[horizon - 1].state[2]) + theta_buffer;
+  if (ego_start_theta > ego_end_theta) {
+    ego_end_theta += max_theta_;
+  }
+  double obs1_start_theta, obs1_end_theta, obs2_start_theta, obs2_end_theta;
+  bool ego_obs1_overlap_flag = false;
+  if (obs1_path.poses.size() > 0) {
+    obs1_start_theta = referenceline.spline.porjectOnSpline(obs1_path.poses[0].pose.position.x,
+                                                                  obs1_path.poses[0].pose.position.y) - theta_buffer;
+    obs1_end_theta = referenceline.spline.porjectOnSpline(obs1_path.poses[horizon -1].pose.position.x,
+                                                                obs1_path.poses[horizon -1].pose.position.y) + theta_buffer;
+    if (obs1_start_theta > obs1_end_theta) {
+      obs1_end_theta += max_theta_;
+    }
+    ego_obs1_overlap_flag = (ego_end_theta >= obs1_start_theta && ego_end_theta <= obs1_end_theta) ||
+      (obs1_end_theta >= ego_start_theta && obs1_end_theta <= ego_end_theta);
+  }
+  bool ego_obs2_overlap_flag = false;
+  if (obs2_path.poses.size() > 0) {
+    obs2_start_theta = referenceline.spline.porjectOnSpline(obs2_path.poses[0].pose.position.x,
+                                                                  obs2_path.poses[0].pose.position.y) - theta_buffer;
+    obs2_end_theta = referenceline.spline.porjectOnSpline(obs2_path.poses[horizon -1].pose.position.x,
+                                                                obs2_path.poses[horizon -1].pose.position.y) + theta_buffer;
+    if (obs2_start_theta > obs2_end_theta) {
+      obs2_end_theta += max_theta_;
+    }
+    ego_obs2_overlap_flag = (ego_end_theta >= obs2_start_theta && ego_end_theta <= obs2_end_theta) ||
+      (obs2_end_theta >= ego_start_theta && obs2_end_theta <= ego_end_theta);
+  }
+  bool obs1_obs2_overlap_flag = false;
+  if (obs1_path.poses.size() > 0 && obs2_path.poses.size() > 0) {
+    obs1_obs2_overlap_flag = (obs1_end_theta >= obs2_start_theta && obs1_end_theta <= obs2_end_theta) ||
+      (obs2_end_theta >= obs1_start_theta && obs2_end_theta <= obs1_end_theta);
+  }
+  if (!ego_obs1_overlap_flag && !ego_obs2_overlap_flag) {
+    if (!obs1_obs2_overlap_flag) {
+      // 都无交互
+      max_v = config.theta_dot_upper_limit;
+    } else {
+      // 其他有交互
+      max_v = config.theta_dot_upper_limit / 2.0;
+    }
+    path_overlap_flag = false;
+  } else if (ego_obs1_overlap_flag && ego_obs2_overlap_flag) {
+    max_v = config.theta_dot_upper_limit;
+    if (config.group_index == 1) {
+      path_overlap_flag = false;
+    } else if (config.group_index == 0) {
+      path_overlap_flag = true;
+      obs_path = obs2_path;
+      obs_odom = obs2_odom;
+    } else {
+      path_overlap_flag = true;
+      obs_path = obs1_path;
+      obs_odom = obs1_odom;
+    }
+  } else {
+    obs_path = ego_obs1_overlap_flag ? obs1_path : obs2_path;
+    obs_odom = ego_obs1_overlap_flag ? obs1_odom : obs2_odom;
+    path_overlap_flag = true;
+    max_v = config.theta_dot_upper_limit;
+  }
+}
+
+bool Mpcc::ClusterFormation(const Resample& referenceline, Config& config,
+    Eigen::SparseMatrix<double> state, const nav_msgs::Path& ego_path,
+    const nav_msgs::Path& obs1_path, const nav_msgs::Odometry obs1_odom,
+    const nav_msgs::Path& obs2_path, const nav_msgs::Odometry obs2_odom) {
+  double dist_thresh = 2.0;
+  double obs1_theta = referenceline.spline.porjectOnSpline(obs1_odom.pose.pose.position.x,
+                                                    obs1_odom.pose.pose.position.y);
+  double obs2_theta = referenceline.spline.porjectOnSpline(obs2_odom.pose.pose.position.x,
+                                                    obs2_odom.pose.pose.position.y);
+  double ego_theta = referenceline.spline.porjectOnSpline(state.coeffRef(0, 0), state.coeffRef(2, 0));
+  if (config.group_index != 0) {
+    leader.x = obs1_odom.pose.pose.position.x;
+    leader.y = obs1_odom.pose.pose.position.y;
+    leader_path =  obs1_path;
+    obs_path = config.group_index == 1 ? obs2_path : obs1_path;
+    obs_odom = config.group_index == 1 ? obs2_odom : obs1_odom;
+    return ((obs1_theta - ego_theta < dist_thresh) && (obs1_theta > ego_theta)) ||
+            (ego_theta - obs1_theta < dist_thresh / 20.0 && (obs1_theta < ego_theta));
+  }
+  leader_path = ego_path;
+  leader.x = state.coeffRef(0, 0);
+  leader.y = state.coeffRef(2, 0);
+  return false;
 }
 
 void Mpcc::UpdateResultForPlot(const Resample& referenceline,

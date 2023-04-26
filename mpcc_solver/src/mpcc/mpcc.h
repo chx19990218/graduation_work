@@ -29,6 +29,16 @@ struct Stage {
   Stage(std::vector<double> state_) { state = state_; }
 };
 
+struct Leader {
+  double x;
+  double y;
+  double theta = 1.0;
+  double phi;
+  std::vector<std::vector<double>> vec{{-0.2, 0.2, -0.2, -0.2}, // 三角
+                                        {0.0, 0.2, 0.0, -0.2}, // 横一
+                                        {0.2, 0.0, -0.2, 0.0}}; // 竖一
+};
+
 class Mpcc {
  public:
   // x vx y vy z vz theta
@@ -91,8 +101,11 @@ class Mpcc {
   // std::vector<std::vector<double>> obstacle_pos_{
   //     {-1.6, -1.2}, {-1.0, -1.2}, {-1.0, -1.0}, {-1.6, -1.0}};
 
-  nav_msgs::Path ego_path;
+  nav_msgs::Path leader_path;
   nav_msgs::Path obs_path;
+  nav_msgs::Odometry obs_odom;
+  
+  Leader leader;
 
   quadrotor_msgs::PositionCommand cmdMsg;
 
@@ -100,9 +113,13 @@ class Mpcc {
   bool init_flag = true;
   bool start_test_flag = false;
   bool path_overlap_flag = false; // 与其他有轨迹交互
+  bool cluster_flag = false;
   double max_cmd_a = 0.0;
   double max_v = 0.0;
   ros::Time start_test_time;
+  ros::Time start_clutter_time;
+  ros::Time start_time;
+  int clutter_index = 0;
 
   int output_index = 0;
   double uav_size = 0.1;
@@ -113,8 +130,8 @@ class Mpcc {
       const Config& config, nav_msgs::Path& ego_path);
   void UpdateState(const Resample& referenceline, Eigen::SparseMatrix<double>& state);
   void CalculateCost(const Resample& referenceline, const Config& config,
-    Eigen::SparseMatrix<double> state, const nav_msgs::Path& ego_path,
-    const nav_msgs::Path& obs_path, const nav_msgs::Odometry obs_odom, const Map& map);
+    Eigen::SparseMatrix<double> state, const nav_msgs::Path& ego_path, const Map& map,
+    quadrotor_msgs::Theta& theta_crowded_msg, ros::Publisher& theta_crowded_pub);
   void RecedeOneHorizon(const Resample& referenceline);
   void SolveQp(const Resample& referenceline, const Map& map,Config& config,
     Eigen::SparseMatrix<double> state, nav_msgs::Path& ego_path, const nav_msgs::Path& obs1_path,
@@ -151,4 +168,12 @@ class Mpcc {
                      Eigen::SparseMatrix<double> state,
                      Eigen::SparseMatrix<double>& Cu, Eigen::SparseMatrix<double>& ulow,
                      Eigen::SparseMatrix<double>& uup);
+  void MutiCollisionCheck(const Resample& referenceline, Config& config,
+    Eigen::SparseMatrix<double> state, nav_msgs::Path& ego_path, const nav_msgs::Path& obs1_path,
+    const nav_msgs::Odometry obs1_odom, const nav_msgs::Path& obs2_path,
+    const nav_msgs::Odometry obs2_odom);
+  bool ClusterFormation(const Resample& referenceline, Config& config,
+    Eigen::SparseMatrix<double> state, const nav_msgs::Path& ego_path,
+    const nav_msgs::Path& obs1_path, const nav_msgs::Odometry obs1_odom,
+    const nav_msgs::Path& obs2_path, const nav_msgs::Odometry obs2_odom);
 };
